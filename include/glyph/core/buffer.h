@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cassert>
+#include <vector>
 
 namespace glyph::core {
 
@@ -103,11 +104,14 @@ namespace glyph::core {
     }
 
   private:
+    // Return true if (x, y) lies within the view's local bounds [0, w) x [0, h)
     [[nodiscard]] constexpr bool
     in_bounds_(coord_t x, coord_t y) const noexcept {
       return (x >= 0 && y >= 0 && x < size_.w && y < size_.h);
     }
 
+    // Convert a 2D local coordinate (x, y) into a linear index
+    // using row-major storage with the given row stride.
     [[nodiscard]] constexpr std::ptrdiff_t
     index_(coord_t x, coord_t y) const noexcept {
       return std::ptrdiff_t(y) * stride_ + std::ptrdiff_t(x);
@@ -118,6 +122,103 @@ namespace glyph::core {
     std::ptrdiff_t stride_ = 0; // in cells
   };
 
-  // Todo.. Buffer: owning 2D cell buffer.
-  class Buffer final {};
+  // Buffer: owning 2D cell buffer.
+  class Buffer final {
+  public:
+    using value_type = Cell;
+
+    Buffer() = default;
+
+    explicit Buffer(Size s, const Cell &fill_cell = Cell{})
+        : size_(s.non_negative()),
+          cells_(std::size_t(size_.w) * std::size_t(size_.h), fill_cell) {
+    }
+
+    [[nodiscard]] Size size() const noexcept {
+      return size_;
+    }
+    [[nodiscard]] coord_t width() const noexcept {
+      return size_.w;
+    }
+    [[nodiscard]] coord_t height() const noexcept {
+      return size_.h;
+    }
+
+    // Bounds in buffer-local coordinates: origin always (0, 0).
+    [[nodiscard]] Rect bounds() const noexcept {
+      return Rect{Point{0, 0}, size_};
+    }
+
+    [[nodiscard]] bool empty() const noexcept {
+      return size_.empty();
+    }
+
+    // Resize resets contents (simple and predictable). If you need preserving
+    // resize,
+    // implement it explicitly later; do not smuggle policy into core by
+    // default.
+    void resize(Size s, const Cell &fill_cell = Cell{}) {
+      size_ = s.non_negative();
+      cells_.assign(std::size_t(size_.w) * std::size_t(size_.h), fill_cell);
+    }
+
+    // Unsafe access (debug-checked).
+    [[nodiscard]] Cell &at(coord_t x, coord_t y) noexcept {
+      assert(bounds().contains(Point{x, y}));
+      return cells_[index_(x, y)];
+    }
+    [[nodiscard]] const Cell &at(coord_t x, coord_t y) const noexcept {
+      assert(bounds().contains(Point{x, y}));
+      return cells_[index_(x, y)];
+    }
+
+    // Safe set: ignores out-of-bounds.
+    void set(Point p, const Cell &c) noexcept {
+      if (!bounds().contains(p))
+        return;
+      at(p.x, p.y) = c;
+    }
+
+    // Fill whole buffer.
+    void fill(const Cell &c) noexcept {
+      std::fill(cells_.begin(), cells_.end(), c);
+    }
+
+    // Fill a rect with clipping.
+    void fill_rect(Rect r, const Cell &c) noexcept {
+      view().fill_rect(r, c);
+    }
+
+    // Owning buffer -> view
+    [[nodiscard]] BufferView view() noexcept {
+      return BufferView{cells_.data(), size_, stride_()};
+    }
+    [[nodiscard]] BufferView view() const noexcept {
+      // const-correct view: we return a mutable view type only if you want
+      // mutation. For stricter const correctness, split into ConstBufferView
+      // later.
+      return BufferView{const_cast<Cell *>(cells_.data()), size_, stride_()};
+    }
+
+    // Subview (clipped). Returned view may be empty.
+    [[nodiscard]] BufferView subview(Rect r) noexcept {
+      return view().subview(r);
+    }
+
+  private:
+    // Return the number of cells between starts of two consecutive rows.
+    [[nodiscard]] std::ptrdiff_t stride_() const noexcept {
+      return std::ptrdiff_t(size_.w);
+    }
+
+    // Convert a 2D buffer-local coordinate (x, y) into a linear index
+    // for row-major contiguous storage.
+    [[nodiscard]] std::size_t index_(coord_t x, coord_t y) const noexcept {
+      return std::size_t(y) * std::size_t(size_.w) + std::size_t(x);
+    }
+
+    Size              size_{0, 0};
+    std::vector<Cell> cells_{};
+  };
+
 } // namespace glyph::core
