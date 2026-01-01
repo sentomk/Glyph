@@ -1,4 +1,8 @@
 // glyph/core/style.h
+//
+// Purely visual state. 
+// Describe what a cell should look like.
+
 #pragma once
 #include <cstdint>
 
