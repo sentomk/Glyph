@@ -11,7 +11,6 @@
 
 #include "cell.h"
 #include "geometry.h"
-#include "glyph/core/cell.h"
 #include "types.h"
 
 #include <cstddef>
