@@ -6,7 +6,83 @@ project(glyph
   LANGUAGES CXX 
 )
 
+# ------------------------------------------------------------
+# Language & Tooling
+# ------------------------------------------------------------
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(GNUInstallDirs)
+
+# ------------------------------------------------------------
+# Utils
+# ------------------------------------------------------------
+
+function(GLYPH_JOIN_HEADERS OUT_VAR)
+  set(_accum)
+  
+  foreach(_h IN LISTS ARGN)
+    list(APPEND _accum "${_h}")
+  endforeach()
+
+  set(${OUT_VAR} "${_accum}" PARENT_SCOPE)
+endfunction()
+
+# ------------------------------------------------------------
+# Public Headers
+# ------------------------------------------------------------
+
+GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
+  include/glyph/core/buffer.h
+  include/glyph/core/cell.h
+  include/glyph/core/geometry.h
+  include/glyph/core/style.h
+  include/glyph/core/types.h
+)
+
+# ------------------------------------------------------------
+# Core Library
+# ------------------------------------------------------------
+
+add_library(glyph
+  src/glyph_dummy.cpp
+)
+
+add_library(glyph::glyph ALIAS glyph)
+
+# language/features
+target_compile_features(glyph PUBLIC cxx_std_20)
+
+# include paths
+target_include_directories(glyph
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+# public headers (IDE / install awareness)
+
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
+  target_sources(glyph
+    PUBLIC
+      FILE_SET HEADERS
+      BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include
+      FILES ${GLYPH_PUBLIC_HEADERS}
+  )
+endif()
+
+# ------------------------------------------------------------
+# Samples
+# ------------------------------------------------------------
+
+add_executable(glyph_demo
+  samples/demo.cpp
+)
+
+target_link_libraries(glyph_demo
+  PRIVATE glyph::glyph
+)
