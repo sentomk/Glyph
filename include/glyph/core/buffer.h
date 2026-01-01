@@ -11,6 +11,7 @@
 
 #include "cell.h"
 #include "geometry.h"
+#include "glyph/core/cell.h"
 #include "types.h"
 
 #include <cstddef>
@@ -120,6 +121,64 @@ namespace glyph::core {
     Cell          *data_   = nullptr;
     Size           size_   = {0, 0};
     std::ptrdiff_t stride_ = 0; // in cells
+  };
+
+  // Non-owning read-only 2D view into a buffer.
+  // Semantics are identical to BufferView, except that mutation is forbidden.
+  class ConstBufferView {
+  public:
+    using value_type = Cell;
+    using pointer    = const Cell *;
+    using reference  = const Cell &;
+
+    // Constructs an empty view.
+    constexpr ConstBufferView() noexcept = default;
+
+    // Constructs a read-only view over raw cell storage.
+    // stride is the number of cells between two consecutive rows.
+    constexpr ConstBufferView(
+        const Cell *data, Size size, std::ptrdiff_t stride) noexcept
+        : data_(data), size_(size), stride_(stride) {
+    }
+
+    // Returns the logical size of the view.
+    constexpr Size size() const noexcept {
+      return size_;
+    }
+
+    // Returns the bounding rectangle of the view in local coordinates.
+    constexpr Rect bounds() const noexcept {
+      return Rect{0, 0, size_.w, size_.h};
+    }
+
+    // Returns true if the view contains no cells.
+    constexpr bool empty() const noexcept {
+      return data_ == nullptr || size_.empty();
+    }
+
+    // Accesses a cell at (x, y).
+    // Behavior is undefined if (x, y) is out of bounds.
+    constexpr const Cell &at(coord_t x, coord_t y) const noexcept {
+      return data_[y * stride_ + x];
+    }
+
+    // Returns a clipped subview.
+    // The resulting view is also read-only.
+    constexpr ConstBufferView subview(Rect r) const noexcept {
+      r = r.clipped(bounds());
+      if (r.empty())
+        return {};
+
+      return ConstBufferView{
+          data_ + r.top() * stride_ + r.left(),
+          Size{r.width(), r.height()},
+          stride_};
+    }
+
+  private:
+    const Cell    *data_ = nullptr;
+    Size           size_{};
+    std::ptrdiff_t stride_ = 0;
   };
 
   // Buffer: owning 2D cell buffer.
