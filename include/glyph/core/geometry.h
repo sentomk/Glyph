@@ -9,7 +9,7 @@
 #pragma once
 
 #include <algorithm>
-#include <cstdint>
+
 #include <type_traits>
 
 #include "types.h"
