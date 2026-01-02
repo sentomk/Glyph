@@ -5,7 +5,6 @@
 // style: how to draw
 
 #pragma once
-#include <cstdint>
 #include "style.h"
 
 namespace glyph::core {
