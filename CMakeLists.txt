@@ -50,6 +50,8 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/view.h
   include/glyph/view/primitives/fill.h
 
+  # render/
+  include/glyph/render/render.h
 )
 
 # ------------------------------------------------------------
@@ -58,6 +60,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 
 add_library(glyph
   src/glyph_dummy.cpp
+  src/debug_renderer.cpp
 )
 
 add_library(glyph::glyph ALIAS glyph)
