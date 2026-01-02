@@ -93,7 +93,13 @@ endif()
 add_executable(glyph_demo
   samples/demo.cpp
 )
-
 target_link_libraries(glyph_demo
+  PRIVATE glyph::glyph
+)
+
+add_executable(debug_render
+  samples/debug_render.cpp
+)
+target_link_libraries(debug_render
   PRIVATE glyph::glyph
 )
