@@ -51,7 +51,19 @@ namespace glyph::render {
     for (glyph::core::coord_t y = 0; y < size.h; ++y) {
       out_ << "    ";
       for (glyph::core::coord_t x = 0; x < size.w; ++x) {
-        out_ << to_ascii(buf.at(x, y));
+        const auto &cell = buf.at(x, y);
+
+        if (cell.width == 0) {
+          out_ << ' ';
+          continue;
+        }
+
+        out_ << to_ascii(cell);
+
+        if (cell.width == 2) {
+          out_ << ' ';
+          ++x;
+        }
       }
       out_ << "\n";
     }
