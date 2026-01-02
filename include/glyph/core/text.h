@@ -16,7 +16,7 @@ namespace glyph::core {
   // Width policy placeholder for future grapheme support.
   enum class WidthPolicy : std::uint8_t {
     Codepoint = 0,
-    Grapheme  = 1, // TODO
+    Grapheme  = 1, // reserved; not implemented
   };
 
   // Return display width for a single codepoint.

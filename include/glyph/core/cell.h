@@ -24,7 +24,7 @@ namespace glyph::core {
     }
 
     friend constexpr bool operator==(Cell a, Cell b) noexcept {
-      return a.ch == b.ch && a.style == b.style;
+      return a.ch == b.ch && a.width == b.width && a.style == b.style;
     }
     friend constexpr bool operator!=(Cell a, Cell b) noexcept {
       return !(a == b);
