@@ -54,7 +54,9 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 
   # render/
   include/glyph/render/render.h
+  include/glyph/render/ansi/ansi_renderer.h
   include/glyph/render/debug/debug_renderer.h
+
 )
 
 # ------------------------------------------------------------
@@ -62,8 +64,8 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 # ------------------------------------------------------------
 
 add_library(glyph
-  src/glyph_dummy.cpp
   src/debug_renderer.cpp
+  src/ansi_renderer.cpp
 )
 
 add_library(glyph::glyph ALIAS glyph)
