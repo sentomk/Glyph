@@ -128,6 +128,47 @@ namespace glyph::core {
       };
     }
 
+    // Write a cell with width-aware placement.
+    void put(Point p, Cell c) noexcept {
+      if (p.x < 0 || p.y < 0 || p.x >= size.w || p.y >= size.h)
+        return;
+
+      // If overwriting a wide glyph's lead cell, clear its spacer.
+      {
+        const auto &cur = at(p.x, p.y);
+        if (cur.width == 2 && p.x + 1 < size.w) {
+          at(p.x + 1, p.y) = Cell{};
+        }
+        // If overwriting a spacer cell, clear the left wide glyph.
+        if (cur.width == 0 && p.x > 0) {
+          auto &left = at(p.x - 1, p.y);
+          if (left.width == 2) {
+            left = Cell{};
+          }
+        }
+      }
+
+      if (c.width == 2) {
+        // If no space for wide glyph, degrade to width=1.
+        if (p.x + 1 >= size.w) {
+          c.width      = 1;
+          at(p.x, p.y) = c;
+          return;
+        }
+
+        at(p.x, p.y) = c;
+
+        Cell spacer{};
+        spacer.ch        = U'\0';
+        spacer.width     = 0;
+        spacer.style     = c.style;
+        at(p.x + 1, p.y) = spacer;
+        return;
+      }
+
+      at(p.x, p.y) = c;
+    }
+
     [[nodiscard]] constexpr ConstBufferView const_view() const noexcept {
       return ConstBufferView{data, size, stride};
     }

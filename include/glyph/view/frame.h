@@ -61,7 +61,7 @@ namespace glyph::view {
       if (!bounds().contains(p))
         return;
 
-      buf_.view().at(p.x, p.y) = c;
+      buf_.view().put(p, c);
     }
 
     // Frame -> view (mutable)

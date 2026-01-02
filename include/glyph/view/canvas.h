@@ -45,7 +45,7 @@ namespace glyph::view {
       if (p.x >= view_.size.w || p.y >= view_.size.h)
         return;
 
-      view_.at(p.x, p.y) = c;
+      view_.put(p, c);
     }
 
     // Fill entire canvas.
