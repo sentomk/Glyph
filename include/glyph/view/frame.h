@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "canvas.h"
 #include "glyph/core/buffer.h"
 #include "glyph/core/geometry.h"
 
@@ -99,6 +100,11 @@ namespace glyph::view {
     // Subview (clipped). Returned view may be empty.
     [[nodiscard]] buffer_view_type subview(core::Rect r) noexcept {
       return buf_.view().subview(r);
+    }
+
+    // Generate a Canvas.
+    [[nodiscard]] Canvas canvas(core::Rect area) noexcept {
+      return Canvas{buf_.view().subview(area)};
     }
 
   private:
