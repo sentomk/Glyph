@@ -17,7 +17,7 @@ namespace glyph::render {
     //  - This assumes core::Cell has a printable glyph/char-like member.
     //  - If your Cell uses a different representation (rune, string, etc.),
     //    adjust this mapping here only; the pipeline stays the same.
-    return c.ch ? c.ch : ' ';
+    return c.ch ? static_cast<char>(c.ch) : ' ';
   }
 
   void DebugRenderer::render(const view::Frame &frame) {

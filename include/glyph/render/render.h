@@ -1,4 +1,4 @@
-// glyph/render/renderer.h
+// glyph/render/render.h
 //
 // Frame consumer interface.
 //

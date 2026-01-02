@@ -28,8 +28,7 @@ namespace {
         return;
 
       // Fill background in the given area only.
-      core::Cell dot{};
-      dot.ch = U'.';
+      core::Cell dot = core::Cell::from_char(u'.');
       f.fill_rect(area, dot);
 
       // Write a label, clipped by area bounds.
@@ -40,8 +39,7 @@ namespace {
 
       for (core::coord_t i = 0; text[i] != U'\0'; ++i) {
         const core::Point p{x0 + i, y0};
-        core::Cell        c{};
-        c.ch = text[i];
+        core::Cell        c = core::Cell::from_char(text[i]);
 
         // safe set
         f.set(p, c);
