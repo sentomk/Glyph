@@ -13,6 +13,12 @@
 
 namespace glyph::core {
 
+  // Width policy placeholder for future grapheme support.
+  enum class WidthPolicy : std::uint8_t {
+    Codepoint = 0,
+    Grapheme  = 1, // TODO
+  };
+
   // Return display width for a single codepoint.
   // 0 = non-printing/control, 1 = narrow, 2 = wide (CJK/fullwidth).
   constexpr std::uint8_t cell_width(char32_t c) noexcept {
@@ -28,6 +34,12 @@ namespace glyph::core {
       return 2;
 
     return 1;
+  }
+
+  // TODO: Future extension point.
+  // For now, callers should use cell_width(c).
+  constexpr std::uint8_t cell_width(char32_t c, WidthPolicy policy) noexcept {
+    return (policy == WidthPolicy::Codepoint) ? cell_width(c) : cell_width(c);
   }
 
 } // namespace glyph::core
