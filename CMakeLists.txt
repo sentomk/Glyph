@@ -95,9 +95,18 @@ endif()
 # Samples
 # ------------------------------------------------------------
 
+# debug_render
 add_executable(debug_render
   samples/debug_render.cpp
 )
 target_link_libraries(debug_render
+  PRIVATE glyph::glyph
+)
+
+# ansi_render
+add_executable(ansi_render
+  samples/ansi_render.cpp
+)
+target_link_libraries(ansi_render
   PRIVATE glyph::glyph
 )
