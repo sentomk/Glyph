@@ -11,6 +11,7 @@
 
 #include "cell.h"
 #include "geometry.h"
+#include "glyph/core/types.h"
 #include "types.h"
 
 #include <algorithm>
@@ -70,17 +71,66 @@ namespace glyph::core {
   };
 
   // ------------------------------------------------------------
+  // Dirty line tracking
+  // ------------------------------------------------------------
+  class DirtyLines final {
+  public:
+    void resize(coord_t h) {
+      flags_.assign(std::size_t(h), std::uint8_t(1));
+    }
+
+    void mark(coord_t y) noexcept {
+      if (y < 0 || y >= coord_t(flags_.size()))
+        return;
+      flags_[std::size_t(y)] = 1;
+    }
+
+    void mark_range(coord_t y0, coord_t y1) noexcept {
+      if (flags_.empty())
+        return;
+      if (y0 < 0)
+        y0 = 0;
+      if (y1 > coord_t(flags_.size()))
+        y1 = coord_t(flags_.size());
+      for (coord_t y = y0; y < y1; ++y) {
+        flags_[std::size_t(y)] = 1;
+      }
+    }
+
+    void clear() noexcept {
+      for (auto &f : flags_)
+        f = 0;
+    }
+
+    std::vector<coord_t> take() noexcept {
+      std::vector<coord_t> out;
+      for (coord_t y = 0; y < coord_t(flags_.size()); ++y) {
+        if (flags_[std::size_t(y)]) {
+          out.push_back(y);
+        }
+      }
+      clear();
+      return out;
+    }
+
+  private:
+    std::vector<std::uint8_t> flags_{};
+  };
+
+  // ------------------------------------------------------------
   // BufferView: writable, non-owning 2D view
   // ------------------------------------------------------------
   struct BufferView final {
     Cell          *data = nullptr;
     Size           size{};
     std::ptrdiff_t stride = 0;
+    DirtyLines    *dirty  = nullptr;
 
     constexpr BufferView() noexcept = default;
 
-    constexpr BufferView(Cell *d, Size s, std::ptrdiff_t st) noexcept
-        : data(d), size(s), stride(st) {
+    constexpr BufferView(
+        Cell *d, Size s, std::ptrdiff_t st, DirtyLines *dirty_) noexcept
+        : data(d), size(s), stride(st), dirty(dirty_) {
     }
 
     [[nodiscard]] constexpr bool empty() const noexcept {
@@ -120,6 +170,7 @@ namespace glyph::core {
           data + offset,
           clipped.size,
           stride,
+          dirty,
       };
     }
 
@@ -127,6 +178,9 @@ namespace glyph::core {
     void clear(const Cell &c = Cell{}) noexcept {
       if (empty())
         return;
+
+      if (dirty)
+        dirty->mark_range(0, size.h);
 
       for (coord_t y = 0; y < size.h; ++y) {
         for (coord_t x = 0; x < size.w; ++x) {
@@ -137,9 +191,14 @@ namespace glyph::core {
 
     // Fill a rect (clipped) with a cell.
     void fill_rect(Rect r, const Cell &c) noexcept {
-      auto sub = subview(r);
-      if (sub.empty())
+      Rect clipped = r.intersect(bounds());
+      if (clipped.empty())
         return;
+
+      if (dirty)
+        dirty->mark_range(clipped.origin.y, clipped.origin.y + clipped.size.h);
+
+      auto sub = subview(clipped);
 
       for (coord_t y = 0; y < sub.size.h; ++y) {
         for (coord_t x = 0; x < sub.size.w; ++x) {
@@ -158,6 +217,9 @@ namespace glyph::core {
       if (clipped.empty())
         return;
 
+      if (dirty)
+        dirty->mark_range(clipped.origin.y, clipped.origin.y + clipped.size.h);
+
       // Compute source start offset after clipping.
       const coord_t sx0 = coord_t(clipped.origin.x - dst.x);
       const coord_t sy0 = coord_t(clipped.origin.y - dst.y);
@@ -174,6 +236,9 @@ namespace glyph::core {
     void put(Point p, Cell c) noexcept {
       if (p.x < 0 || p.y < 0 || p.x >= size.w || p.y >= size.h)
         return;
+
+      if (dirty)
+        dirty->mark(p.y);
 
       // If overwriting a wide glyph's lead cell, clear its spacer.
       {
@@ -225,6 +290,7 @@ namespace glyph::core {
 
     explicit Buffer(Size s)
         : size_(s), cells_(std::size_t(s.w) * std::size_t(s.h)) {
+      dirty_.resize(s.h);
     }
 
     [[nodiscard]] Size size() const noexcept {
@@ -240,6 +306,7 @@ namespace glyph::core {
           cells_.data(),
           size_,
           stride_(),
+          &dirty_,
       };
     }
 
@@ -271,6 +338,7 @@ namespace glyph::core {
       if (s.w <= 0 || s.h <= 0) {
         size_ = s;
         cells_.clear();
+        dirty_.resize(s.h);
         return;
       }
 
@@ -291,6 +359,7 @@ namespace glyph::core {
 
       size_ = s;
       cells_.swap(next);
+      dirty_.resize(s.h);
     }
 
     // Backward-compatible name if you want to keep call sites stable.
@@ -299,13 +368,18 @@ namespace glyph::core {
       return const_view();
     }
 
+    std::vector<coord_t> take_dirty_lines() const {
+      return dirty_.take();
+    }
+
   private:
     [[nodiscard]] std::ptrdiff_t stride_() const noexcept {
       return std::ptrdiff_t(size_.w);
     }
 
-    Size              size_{0, 0};
-    std::vector<Cell> cells_{};
+    Size               size_{0, 0};
+    std::vector<Cell>  cells_{};
+    mutable DirtyLines dirty_{};
   };
 
 } // namespace glyph::core

@@ -76,25 +76,12 @@ namespace glyph::view {
 
     // Fill whole frame.
     void fill(const cell_type &c) noexcept {
-      auto v = buf_.view();
-      for (core::coord_t y = 0; y < v.size.h; ++y) {
-        for (core::coord_t x = 0; x < v.size.w; ++x) {
-          v.at(x, y) = c;
-        }
-      }
+      buf_.view().clear(c);
     }
 
     // Fill a rect with clipping.
     void fill_rect(core::Rect r, const cell_type &c) noexcept {
-      auto v = buf_.view().subview(r);
-      if (v.empty())
-        return;
-
-      for (core::coord_t y = 0; y < v.size.h; ++y) {
-        for (core::coord_t x = 0; x < v.size.w; ++x) {
-          v.at(x, y) = c;
-        }
-      }
+      buf_.view().fill_rect(r, c);
     }
 
     // Subview (clipped). Returned view may be empty.
@@ -105,6 +92,10 @@ namespace glyph::view {
     // Generate a Canvas.
     [[nodiscard]] Canvas canvas(core::Rect area) noexcept {
       return Canvas{buf_.view().subview(area)};
+    }
+
+    std::vector<core::coord_t> take_dirty_lines() const {
+      return buf_.take_dirty_lines();
     }
 
   private:
