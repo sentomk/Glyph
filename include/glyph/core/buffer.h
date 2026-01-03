@@ -19,6 +19,7 @@
 #include "geometry.h"
 #include "types.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <vector>
@@ -128,6 +129,53 @@ namespace glyph::core {
       };
     }
 
+    // Fill entire view with a cell.
+    void clear(const Cell &c = Cell{}) noexcept {
+      if (empty())
+        return;
+
+      for (coord_t y = 0; y < size.h; ++y) {
+        for (coord_t x = 0; x < size.w; ++x) {
+          at(x, y) = c;
+        }
+      }
+    }
+
+    // Fill a rect (clipped) with a cell.
+    void fill_rect(Rect r, const Cell &c) noexcept {
+      auto sub = subview(r);
+      if (sub.empty())
+        return;
+
+      for (coord_t y = 0; y < sub.size.h; ++y) {
+        for (coord_t x = 0; x < sub.size.w; ++x) {
+          sub.at(x, y) = c;
+        }
+      }
+    }
+
+    // Blit from a const view into this view at dst.
+    void blit(ConstBufferView src, Point dst) noexcept {
+      if (empty() || src.empty())
+        return;
+
+      Rect dst_rect{dst, src.size};
+      Rect clipped = dst_rect.intersect(bounds());
+      if (clipped.empty())
+        return;
+
+      // Compute source start offset after clipping.
+      const coord_t sx0 = coord_t(clipped.origin.x - dst.x);
+      const coord_t sy0 = coord_t(clipped.origin.y - dst.y);
+
+      for (coord_t y = 0; y < clipped.size.h; ++y) {
+        for (coord_t x = 0; x < clipped.size.w; ++x) {
+          const auto &c = src.at(sx0 + x, sy0 + y);
+          at(clipped.origin.x + x, clipped.origin.y + y) = c;
+        }
+      }
+    }
+
     // Write a cell with width-aware placement.
     void put(Point p, Cell c) noexcept {
       if (p.x < 0 || p.y < 0 || p.x >= size.w || p.y >= size.h)
@@ -207,6 +255,48 @@ namespace glyph::core {
           size_,
           stride_(),
       };
+    }
+
+    // Clear whole buffer.
+    void clear(const Cell &c = Cell{}) noexcept {
+      view().clear(c);
+    }
+
+    // Fill a rect (clipped).
+    void fill_rect(Rect r, const Cell &c) noexcept {
+      view().fill_rect(r, c);
+    }
+
+    // Blit from a const view into this buffer at dst.
+    void blit(ConstBufferView src, Point dst) noexcept {
+      view().blit(src, dst);
+    }
+
+    // Resize buffer, preserving overlapping region.
+    void resize(Size s, const Cell &fill = Cell{}) {
+      if (s.w <= 0 || s.h <= 0) {
+        size_ = s;
+        cells_.clear();
+        return;
+      }
+
+      std::vector<Cell> next(std::size_t(s.w) * std::size_t(s.h), fill);
+
+      const coord_t copy_w = std::min(size_.w, s.w);
+      const coord_t copy_h = std::min(size_.h, s.h);
+
+      for (coord_t y = 0; y < copy_h; ++y) {
+        for (coord_t x = 0; x < copy_w; ++x) {
+          const std::size_t dst_i =
+              std::size_t(y) * std::size_t(s.w) + std::size_t(x);
+          const std::size_t src_i =
+              std::size_t(y) * std::size_t(size_.w) + std::size_t(x);
+          next[dst_i] = cells_[src_i];
+        }
+      }
+
+      size_ = s;
+      cells_.swap(next);
     }
 
     // Backward-compatible name if you want to keep call sites stable.
