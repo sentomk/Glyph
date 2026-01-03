@@ -41,15 +41,16 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   # core/
   include/glyph/core/buffer.h
   include/glyph/core/cell.h
+  include/glyph/core/diff.h
   include/glyph/core/geometry.h
   include/glyph/core/style.h
   include/glyph/core/types.h
   include/glyph/core/text.h
 
   # view/
+  include/glyph/view/canvas.h
   include/glyph/view/frame.h
   include/glyph/view/view.h
-  include/glyph/view/canvas.h
   include/glyph/view/primitives/fill.h
 
   # render/

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "glyph/core/buffer.h"
 #include "glyph/render/render.h"
 #include <iosfwd>
 namespace glyph::render {
@@ -19,7 +20,9 @@ namespace glyph::render {
     void render(const view::Frame &frame) override;
 
   private:
-    std::ostream &out_;
+    std::ostream       &out_;
+    glyph::core::Buffer prev_{};
+    bool                has_prev_ = false;
   };
 
 } // namespace glyph::render
