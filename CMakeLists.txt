@@ -51,6 +51,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   # input/
   include/glyph/input/input.h
   include/glyph/input/input_guard.h
+  include/glyph/input/win_input.h
 
   # render/
   include/glyph/render/render.h
@@ -73,6 +74,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 add_library(glyph
   src/debug_renderer.cpp
   src/ansi_renderer.cpp
+  src/win_input.cpp
 )
 
 add_library(glyph::glyph ALIAS glyph)
