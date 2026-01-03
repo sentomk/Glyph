@@ -1,11 +1,9 @@
 // samples/ansi_render.cpp
 //
-// Rich ANSI renderer demo with Windows input:
-// - Full-frame redraw
-// - Border + title
-// - Bouncing text
-// - Progress bar
-// - Basic FPS estimate
+// Dirty-aware demo:
+// - Frame persists across frames
+// - Background drawn once
+// - Only moving text line + progress line updated per frame
 // - Exit on Esc or Q/q
 
 #include <chrono>
@@ -62,6 +60,12 @@ namespace {
     }
   }
 
+  void clear_text(view::Frame &f, core::Point p, core::coord_t len) {
+    for (core::coord_t i = 0; i < len; ++i) {
+      f.set(core::Point{p.x + i, p.y}, core::Cell::from_char(U' '));
+    }
+  }
+
   void draw_progress(view::Frame &f, core::Rect r, float t01) {
     if (r.empty())
       return;
@@ -112,49 +116,31 @@ int main() {
   input::InputGuard input_guard(input, input::InputMode::Raw);
 
   const core::Size size{48, 14};
-  const char32_t   title[] = U" Glyph ANSI Demo ";
+  const char32_t   title[] = U" Glyph Dirty Demo ";
+
+  // Persistent frame: draw background once.
+  view::Frame framebuf{size};
+  framebuf.fill(core::Cell::from_char(U'.'));
+  draw_border(framebuf, framebuf.bounds());
+  draw_text(framebuf, core::Point{2, 0}, title);
 
   core::coord_t x   = 2;
   core::coord_t dir = 1;
-
-  auto  last = std::chrono::steady_clock::now();
-  float fps  = 0.0f;
 
   for (std::uint64_t frame = 0;; ++frame) {
     if (handle_input(input)) {
       break;
     }
 
-    view::Frame framebuf{size};
-
-    framebuf.fill(core::Cell::from_char(U'.'));
-
-    const core::Rect bounds = framebuf.bounds();
-    draw_border(framebuf, bounds);
-    draw_text(framebuf, core::Point{2, 0}, title);
-
-    const char32_t      moving[] = U"Moving";
-    const core::coord_t y        = 5;
+    // Update only the moving text line.
+    const core::coord_t y = 5;
+    clear_text(framebuf, core::Point{2, y}, size.w - 4);
+    const char32_t moving[] = U"Moving";
     draw_text(framebuf, core::Point{x, y}, moving);
 
+    // Update progress line only.
     const float t01 = static_cast<float>((frame % 100) / 100.0);
     draw_progress(framebuf, core::Rect{2, 10, size.w - 4, 1}, t01);
-
-    auto        now = std::chrono::steady_clock::now();
-    const float dt =
-        std::chrono::duration_cast<std::chrono::duration<float>>(now - last)
-            .count();
-    last                = now;
-    const float instant = (dt > 0.0f) ? (1.0f / dt) : fps;
-    fps                 = fps * 0.9f + instant * 0.1f;
-
-    char fps_buf[32];
-    std::snprintf(fps_buf, sizeof(fps_buf), "FPS: %4.1f", fps);
-    char32_t fps_u32[32]{};
-    for (std::size_t i = 0; fps_buf[i] != '\0'; ++i) {
-      fps_u32[i] = static_cast<char32_t>(fps_buf[i]);
-    }
-    draw_text(framebuf, core::Point{2, 12}, fps_u32);
 
     renderer.render(framebuf);
 

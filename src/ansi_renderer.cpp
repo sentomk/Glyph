@@ -1,13 +1,10 @@
 // glyph/render/ansi/ansi_renderer.cpp
 //
-// ANSI renderer with diff spans.
+// ANSI renderer with dirty-line diff spans.
 
 #include "glyph/render/ansi/ansi_renderer.h"
 
-#include "glyph/core/buffer.h"
 #include "glyph/core/diff.h"
-
-#include "glyph/core/types.h"
 #include "glyph/view/frame.h"
 #include <ostream>
 
@@ -17,25 +14,27 @@ namespace glyph::render {
   }
 
   static void ansi_clear(std::ostream &out) {
-    out << "\x1b[2J"; // clear screen
+    out << "\x1b[2J";
   }
 
   static void ansi_home(std::ostream &out) {
-    out << "\x1b[H"; // cursor home
+    out << "\x1b[H";
   }
 
   static void ansi_reset(std::ostream &out) {
-    out << "\x1b[0m"; // reset attrs
+    out << "\x1b[0m";
   }
 
   static void ansi_move(
       std::ostream &out, glyph::core::coord_t row, glyph::core::coord_t col) {
-    // ANSI cursor position is 1-based
     out << "\x1b[" << (row + 1) << ";" << (col + 1) << "H";
   }
 
+  static void ansi_wrap(std::ostream &out, bool enable) {
+    out << (enable ? "\x1b[?7h" : "\x1b[?7l");
+  }
+
   static char to_ascii(const view::Frame::cell_type &c) noexcept {
-    // Minimal: treat as ASCII. For non-ASCII, caller should handle properly.
     return c.ch ? static_cast<char>(c.ch) : ' ';
   }
 
@@ -111,13 +110,24 @@ namespace glyph::render {
       return;
     }
 
-    // Diff spans only.
-    const auto spans = glyph::core::diff_spans(prev_.const_view(), cur);
+    // Dirty lines only.
+    const auto dirty_lines = frame.take_dirty_lines();
+    if (dirty_lines.empty()) {
+      return;
+    }
+
+    ansi_wrap(out_, false);
+
+    const auto spans =
+        glyph::core::diff_spans(prev_.const_view(), cur, dirty_lines);
+
     for (const auto &span : spans) {
       render_span(out_, cur, span);
     }
 
-    // Update previous buffer.
+    ansi_wrap(out_, true);
+    ansi_reset(out_);
+
     prev_.blit(cur, glyph::core::Point{0, 0});
   }
 
