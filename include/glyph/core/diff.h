@@ -1,6 +1,7 @@
 // glyph/core/diff.h
 //
 // Buffer diff helpers.
+//
 // Responsibilities:
 //  - Compute line hashes for quick change detection.
 //  - Generate minimal changes spans between two buffers.

@@ -6,12 +6,6 @@
 //   - Own or view a rectangular 2D grid of Cells
 //   - Provide safe read/write primitives
 //   - Provide clipping against bounds
-//
-// Design notes:
-//   - Buffer owns storage
-//   - BufferView / ConstBufferView are non-owning, lightweight views
-//   - const-correctness is a hard contract: const Buffer never yields writable
-//   views
 
 #pragma once
 
