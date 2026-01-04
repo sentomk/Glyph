@@ -1,4 +1,4 @@
-// samples/ansi_render.cpp
+// samples/basic/ansi_render.cpp
 //
 // Dirty-aware demo:
 // - Frame persists across frames

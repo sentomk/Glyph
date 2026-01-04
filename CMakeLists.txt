@@ -63,7 +63,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/canvas.h
   include/glyph/view/frame.h
   include/glyph/view/view.h
-  include/glyph/view/primitives/fill.h
+  include/glyph/view/components/fill.h
 
 )
 
@@ -72,9 +72,9 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 # ------------------------------------------------------------
 
 add_library(glyph
-  src/debug_renderer.cpp
-  src/ansi_renderer.cpp
-  src/win_input.cpp
+  src/render/debug/debug_renderer.cpp
+  src/render/ansi/ansi_renderer.cpp
+  src/win32/win_input.cpp
 )
 
 add_library(glyph::glyph ALIAS glyph)
@@ -106,7 +106,7 @@ endif()
 
 # debug_render
 add_executable(debug_render
-  samples/debug_render.cpp
+  samples/basic/debug_render.cpp
 )
 target_link_libraries(debug_render
   PRIVATE glyph::glyph
@@ -114,7 +114,7 @@ target_link_libraries(debug_render
 
 # ansi_render
 add_executable(ansi_render
-  samples/ansi_render.cpp
+  samples/basic/ansi_render.cpp
 )
 target_link_libraries(ansi_render
   PRIVATE glyph::glyph

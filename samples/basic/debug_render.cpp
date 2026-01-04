@@ -1,4 +1,4 @@
-// examples/debug_render.cpp
+// samples/basic/debug_render.cpp
 //
 // Minimal program to validate the core -> view -> render pipeline
 // using DebugRenderer.
