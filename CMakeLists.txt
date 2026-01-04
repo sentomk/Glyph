@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16...3.28)
 
 project(glyph
-  VERSION 0.1.0
+  VERSION 0.1.2
   DESCRIPTION "TUI engine for modern C++"
   LANGUAGES CXX 
 )
@@ -125,5 +125,13 @@ add_executable(ansi_render
   samples/basic/ansi_render.cpp
 )
 target_link_libraries(ansi_render
+  PRIVATE glyph::glyph
+)
+
+# layout_demo
+add_executable(layout_demo
+  samples/basic/layout_demo.cpp
+)
+target_link_libraries(layout_demo
   PRIVATE glyph::glyph
 )
