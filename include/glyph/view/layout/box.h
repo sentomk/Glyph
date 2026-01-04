@@ -10,8 +10,8 @@
 #pragma once
 
 #include "glyph/core/geometry.h"
-#include "glyph/core/types.h"
 #include "types.h"
+
 #include <algorithm>
 #include <span>
 namespace glyph::view::layout {
