@@ -9,7 +9,7 @@
 #pragma once
 
 #include "glyph/core/event.h"
-#include "input.h"
+#include "glyph/input/input.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

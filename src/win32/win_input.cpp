@@ -2,7 +2,7 @@
 //
 // Windows console input backend (minimal).
 
-#include "glyph/input/win_input.h"
+#include "glyph/input/win32/win_input.h"
 #include "glyph/core/event.h"
 
 #include <cassert>

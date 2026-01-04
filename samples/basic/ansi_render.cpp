@@ -19,7 +19,7 @@
 #include "glyph/view/frame.h"
 
 #include "glyph/input/input_guard.h"
-#include "glyph/input/win_input.h"
+#include "glyph/input/win32//win_input.h"
 
 namespace {
 
