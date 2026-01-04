@@ -135,3 +135,12 @@ add_executable(layout_demo
 target_link_libraries(layout_demo
   PRIVATE glyph::glyph
 )
+
+
+# layout_gallery
+add_executable(layout_gallery
+  samples/basic/layout_gallery.cpp
+)
+target_link_libraries(layout_gallery
+  PRIVATE glyph::glyph
+)
