@@ -19,20 +19,24 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Axis helpers
   // ------------------------------------------------------------
+  // Extract main-axis size from a Size.
   inline core::coord_t main_size(core::Size s, Axis axis) noexcept {
     return (axis == Axis::Horizontal) ? s.w : s.h;
   }
 
+  // Extract cross-axis size from a Size.
   inline core::coord_t cross_size(core::Size s, Axis axis) noexcept {
     return (axis == Axis::Horizontal) ? s.h : s.w;
   }
 
+  // Build a Size from main/cross values based on axis.
   inline core::Size
   make_size(core::coord_t main, core::coord_t cross, Axis axis) noexcept {
     return (axis == Axis::Horizontal) ? core::Size{main, cross}
                                       : core::Size{cross, main};
   }
 
+  // Build a Point from main/cross values based on axis.
   inline core::Point
   make_point(core::coord_t main, core::coord_t cross, Axis axis) noexcept {
     return (axis == Axis::Horizontal) ? core::Point{main, cross}
@@ -42,6 +46,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Linear layout: HBox/VBox
   // ------------------------------------------------------------
+  // Linear layout: fixed + flex items distributed along the main axis.
   inline LayoutResult layout_box(
       Axis                     axis,
       core::Rect               area,

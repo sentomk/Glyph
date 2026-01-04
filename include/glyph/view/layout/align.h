@@ -17,6 +17,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Alignment enums
   // ------------------------------------------------------------
+  // Horizontal alignment inside a Rect.
   enum class AlignH : std::uint8_t {
     Left,
     Center,
@@ -24,6 +25,7 @@ namespace glyph::view::layout {
     Stretch,
   };
 
+  // Vertical alignment inside a Rect.
   enum class AlignV : std::uint8_t {
     Top,
     Center,
@@ -43,6 +45,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Compute aligned rect
   // ------------------------------------------------------------
+  // Align a rect with optional size constraints inside the given area.
   inline core::Rect align_rect(core::Rect area, AlignSpec spec) noexcept {
     if (area.empty()) {
       return core::Rect{area.origin, core::Size{0, 0}};
@@ -104,6 +107,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Single-child layout
   // ------------------------------------------------------------
+  // Single-child layout convenience wrapper for align_rect().
   inline LayoutResult layout_align(core::Rect area, AlignSpec spec) {
     LayoutResult out{};
     if (area.empty()) {

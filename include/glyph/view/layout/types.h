@@ -20,6 +20,7 @@
 
 namespace glyph::view::layout {
 
+  // Main axis selection for linear layouts.
   enum class Axis : std::uint8_t {
     Horizontal,
     Vertical,
@@ -33,6 +34,7 @@ namespace glyph::view::layout {
     core::coord_t flex = 1;
   };
 
+  // Layout results are pure Rect slices in draw order.
   struct LayoutResult final {
     std::vector<core::Rect> rects{};
   };

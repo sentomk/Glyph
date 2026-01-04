@@ -16,16 +16,19 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Insets
   // ------------------------------------------------------------
+  // Insets represent margins on each side.
   struct Insets final {
     core::coord_t left   = 0;
     core::coord_t top    = 0;
     core::coord_t right  = 0;
     core::coord_t bottom = 0;
 
+    // Convenience: uniform inset on all sides.
     static constexpr Insets all(core::coord_t v) noexcept {
       return Insets{v, v, v, v};
     }
 
+    // Convenience: horizontal/vertical inset.
     static constexpr Insets hv(core::coord_t h, core::coord_t v) noexcept {
       return Insets{h, v, h, v};
     }
@@ -34,6 +37,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Inset a rect by margins
   // ------------------------------------------------------------
+  // Shrink a rect by margins on each side.
   inline core::Rect inset_rect(core::Rect area, Insets in) noexcept {
     const core::coord_t x0 = core::coord_t(area.left() + in.left);
     const core::coord_t y0 = core::coord_t(area.top() + in.top);
@@ -53,6 +57,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Single-child layout from inset rect
   // ------------------------------------------------------------
+  // Single-child layout convenience wrapper for inset_rect().
   inline LayoutResult layout_inset(core::Rect area, Insets in) {
     LayoutResult out{};
     if (area.empty()) {

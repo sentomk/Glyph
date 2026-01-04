@@ -18,6 +18,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Stack layout
   // ------------------------------------------------------------
+  // Return the same rect for each child (overlay).
   inline LayoutResult layout_stack(core::Rect area, std::size_t count) {
     LayoutResult out{};
     if (area.empty() || count == 0) {

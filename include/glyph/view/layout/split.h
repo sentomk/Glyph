@@ -20,11 +20,13 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Ratio split
   // ------------------------------------------------------------
+  // Split ratios are weights along the main axis.
   struct SplitRatio final {
     std::uint32_t weight = 1;
   };
 
   // Split by ratios along a main axis.
+  // Split by ratio weights along the chosen axis.
   inline LayoutResult layout_split_ratio(
       Axis                        axis,
       core::Rect                  area,
@@ -93,6 +95,7 @@ namespace glyph::view::layout {
   // ------------------------------------------------------------
   // Two-pane split (first fixed, second remainder)
   // ------------------------------------------------------------
+  // Two-pane split: first fixed, second takes the remaining space.
   inline LayoutResult layout_split_fixed(
       Axis          axis,
       core::Rect    area,
