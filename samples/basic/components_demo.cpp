@@ -1,6 +1,6 @@
 ﻿// samples/basic/components_demo.cpp
 //
-// Component demo: shows FillView, BorderView, LabelView, and HBox/VBox.
+// Component demo: shows FillView, BorderView, LabelView, and HStack/VStack.
 
 #include <iostream>
 
@@ -11,11 +11,10 @@
 #include "glyph/view/view.h"
 
 #include "glyph/view/components/border.h"
-#include "glyph/view/components/box_layout.h"
+#include "glyph/view/components/stack.h"
 #include "glyph/view/components/fill.h"
 #include "glyph/view/components/label.h"
 #include "glyph/view/layout/inset.h"
-#include "glyph/view/layout/split.h"
 
 namespace {
 
@@ -57,30 +56,47 @@ namespace {
       fill_.render(f, area);
       border_.render(f, area);
 
-      view::layout::SplitRatio halves[] = {{1}, {1}};
-      const auto rows = view::layout::layout_split_ratio(
-          view::layout::Axis::Vertical, area, halves, 1);
-      if (rows.rects.size() < 2) {
-        return;
-      }
+      class LabelPaneView final : public view::View {
+      public:
+        LabelPaneView(std::u32string text, bool wrap, bool ellipsis)
+            : text_(std::move(text)), wrap_(wrap), ellipsis_(ellipsis) {
+        }
 
-      const auto top = view::layout::inset_rect(rows.rects[0],
-                                                view::layout::Insets::all(1));
-      const auto bottom = view::layout::inset_rect(
-          rows.rects[1], view::layout::Insets::all(1));
+        void render(view::Frame &f, core::Rect area) const override {
+          if (area.empty())
+            return;
 
-      view::LabelView wrap_label(
-          U"Wrap: The quick brown fox jumps over the lazy dog.");
-      wrap_label.set_align(view::layout::AlignH::Left, view::layout::AlignV::Top);
-      wrap_label.set_wrap(true);
-      wrap_label.render(f, top);
+          const auto inner =
+              view::layout::inset_rect(area, view::layout::Insets::all(1));
 
-      view::LabelView ellipsis_label(
-          U"Ellipsis: The quick brown fox jumps over the lazy dog.");
-      ellipsis_label.set_align(view::layout::AlignH::Left,
-                               view::layout::AlignV::Top);
-      ellipsis_label.set_ellipsis(true);
-      ellipsis_label.render(f, bottom);
+          view::LabelView label(text_);
+          label.set_align(
+              view::layout::AlignH::Left, view::layout::AlignV::Top);
+          label.set_wrap(wrap_);
+          label.set_ellipsis(ellipsis_);
+          label.render(f, inner);
+        }
+
+      private:
+        std::u32string text_;
+        bool           wrap_     = false;
+        bool           ellipsis_ = false;
+      };
+
+      LabelPaneView top(
+          U"Wrap: The quick brown fox jumps over the lazy dog.", true, false);
+      LabelPaneView bottom(
+          U"Ellipsis: The quick brown fox jumps over the lazy dog.",
+          false,
+          true);
+
+      auto stack = view::VStack(
+          {
+              view::StackChild{.view = &top, .weight = 1},
+              view::StackChild{.view = &bottom, .weight = 1},
+          },
+          1);
+      stack.render(f, area);
     }
 
   private:
@@ -108,11 +124,13 @@ int main() {
   view::BorderView border_right(core::Cell::from_char(U'='));
   RightPaneView    right(fill_right, border_right);
 
-  auto layout = view::HBox({
-      view::BoxChild{.view = &fill_left, .weight = 1},
-      view::BoxChild{.view = &mid, .weight = 1},
-      view::BoxChild{.view = &right, .weight = 1},
-  }, 1);
+  auto layout = view::HStack(
+      {
+          view::StackChild{.view = &fill_left, .weight = 1},
+          view::StackChild{.view = &mid, .weight = 1},
+          view::StackChild{.view = &right, .weight = 1},
+      },
+      1);
 
   layout.render(frame, area);
 

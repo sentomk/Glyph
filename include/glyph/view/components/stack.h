@@ -1,11 +1,11 @@
-﻿// glyph/view/components/box_layout.h
+﻿// glyph/view/components/stack.h
 //
-// BoxLayoutView: compose child Views in a linear box layout.
+// Stack: compose child Views in a linear box layout.
 //
 // Responsibilities:
 //   - Use layout::layout_box() to compute child rects.
 //   - Render children in order along the chosen axis.
-//   - Provide HBox/VBox helpers for common usage.
+//   - Provide HStack/VStack helpers for common usage.
 
 #pragma once
 
@@ -21,28 +21,28 @@
 namespace glyph::view {
 
   // ------------------------------------------------------------
-  // BoxChild
+  // StackChild
   // ------------------------------------------------------------
-  struct BoxChild final {
+  struct StackChild final {
     const View   *view   = nullptr;
     core::coord_t main   = -1;
     core::coord_t weight = 1;
   };
 
   // ------------------------------------------------------------
-  // BoxLayoutView
+  // Stack
   // ------------------------------------------------------------
-  class BoxLayoutView : public View {
+  class Stack : public View {
 
   public:
-    explicit BoxLayoutView(layout::Axis                    axis,
-                           std::initializer_list<BoxChild> children,
-                           core::coord_t                   spacing = 0)
+    explicit Stack(layout::Axis                     axis,
+                   std::initializer_list<StackChild> children,
+                   core::coord_t                    spacing = 0)
         : axis_(axis), spacing_(spacing), children_(children) {
     }
 
-    explicit BoxLayoutView(layout::Axis axis, std::vector<BoxChild> children,
-                           core::coord_t spacing = 0)
+    explicit Stack(layout::Axis axis, std::vector<StackChild> children,
+                   core::coord_t spacing = 0)
         : axis_(axis), spacing_(spacing), children_(std::move(children)) {
     }
 
@@ -72,22 +72,22 @@ namespace glyph::view {
     }
 
   private:
-    layout::Axis          axis_;
-    core::coord_t         spacing_ = 0;
-    std::vector<BoxChild> children_{};
+    layout::Axis            axis_;
+    core::coord_t           spacing_ = 0;
+    std::vector<StackChild> children_{};
   };
 
   // ------------------------------------------------------------
-  // HBox / VBox helpers
+  // HStack / VStack helpers
   // ------------------------------------------------------------
-  inline BoxLayoutView HBox(std::initializer_list<BoxChild> children,
-                            core::coord_t                   spacing = 0) {
-    return BoxLayoutView(layout::Axis::Horizontal, children, spacing);
+  inline Stack HStack(std::initializer_list<StackChild> children,
+                      core::coord_t                    spacing = 0) {
+    return Stack(layout::Axis::Horizontal, children, spacing);
   }
 
-  inline BoxLayoutView VBox(std::initializer_list<BoxChild> children,
-                            core::coord_t                   spacing = 0) {
-    return BoxLayoutView(layout::Axis::Vertical, children, spacing);
+  inline Stack VStack(std::initializer_list<StackChild> children,
+                      core::coord_t                    spacing = 0) {
+    return Stack(layout::Axis::Vertical, children, spacing);
   }
 
 } // namespace glyph::view
