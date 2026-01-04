@@ -1,4 +1,4 @@
-// glyph/view/primitives/fill.h
+// glyph/view/components/fill.h
 //
 // FillView: fill an area with a constant cell
 //
