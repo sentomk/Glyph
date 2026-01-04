@@ -15,17 +15,19 @@ View → Frame (semantic draw) → Renderer (backend output)
 
 - **core/**: geometry / Cell / Buffer / width rules / dirty / diff
 - **view/**: semantic drawing interfaces (View, Frame, Canvas)
+- **view/layout/**: pure layout helpers (box/stack/inset/align/split)
 - **render/**: backend output (ANSI / Debug)
 - **input/**: unified event model + Windows input backend
 
 Layering rule: upper layers do not depend on lower-level details; backends are replaceable.
 
-## Current Features (0.1.0)
+## Current Features (0.1.2)
 - Semantic 2D canvas and minimal draw pipeline
 - `Cell` width policy + write-time dirty marking
 - ANSI renderer (diff/dirty optimized)
 - Windows input (chars / Esc / basic keys)
-- Demo: ANSI animation + input exit
+- Layout helpers: box/stack/inset/align/split (pure rect slicing)
+- Demos: ANSI animation + layout demo
 
 ## Example
 Build & run:
@@ -35,6 +37,11 @@ cmake --build build
 ./build/ansi_render
 ```
 
+Layout demo:
+```
+./build/layout_demo
+```
+
 Exit with `Esc` or `Q`.
 
 ## Directory Layout
@@ -42,6 +49,7 @@ Exit with `Esc` or `Q`.
 include/glyph/
   core/    core types, geometry, Cell, Buffer, diff
   view/    View/Frame/Canvas
+  view/layout/  box/stack/inset/align/split
   render/  Renderer/ANSI/Debug
   input/   Event/Input/WinInput
 src/
@@ -56,11 +64,11 @@ samples/
 ## Known Limitations (current)
 - Windows input only
 - ANSI output is minimal (no color/style yet)
-- No layout layer, no component library
+- No component library yet
 
 ## Roadmap
 - Color/style (16/256/truecolor)
-- Layout layer (VBox/HBox/Stack)
+- Layout layer (grid/flow/dock)
 - Cross-platform input (Unix/macOS)
 - Components (Label/Border/Block/Paragraph)
 
