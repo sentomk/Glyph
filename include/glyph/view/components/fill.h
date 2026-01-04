@@ -1,10 +1,10 @@
-// glyph/view/components/fill.h
+﻿// glyph/view/components/fill.h
 //
-// FillView: fill an area with a constant cell
+// FillView: fill an area with a constant cell.
 //
 // Responsibilities:
-//   - Validate Frame clipping behavior via fill_rect()
-//   - Provide a trivial building block for composition
+//   - Validate Frame clipping behavior via fill_rect().
+//   - Provide a trivial building block for composition.
 
 #pragma once
 
@@ -19,9 +19,11 @@ namespace glyph::view {
   class FillView : public View {
 
   public:
+    // Construct with a fill cell.
     explicit FillView(core::Cell c) : cell_(c) {
     }
 
+    // Fill the given area.
     void render(Frame &f, core::Rect area) const override {
       if (area.empty()) {
         return;

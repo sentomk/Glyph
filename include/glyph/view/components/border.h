@@ -19,9 +19,11 @@ namespace glyph::view {
   class BorderView : public View {
 
   public:
+    // Construct with a border cell.
     explicit BorderView(core::Cell c) : cell_(c) {
     }
 
+    // Draw the border along the perimeter only.
     void render(Frame &f, core::Rect area) const override {
       if (area.empty()) {
         return;
