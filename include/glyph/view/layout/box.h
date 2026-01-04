@@ -98,6 +98,14 @@ namespace glyph::view::layout {
     core::coord_t cursor    = 0;
     core::coord_t used_flex = 0;
 
+    // Find the last flex item so we can absorb any remainder there.
+    std::size_t last_flex_index = items.size();
+    for (std::size_t i = 0; i < items.size(); ++i) {
+      if (items[i].main < 0) {
+        last_flex_index = i;
+      }
+    }
+
     // ------------------------------------------------------------
     // Stage 3: assign size to each item and emit Rects.
     // ------------------------------------------------------------
@@ -114,8 +122,8 @@ namespace glyph::view::layout {
         // Flex-size item: proportional share of remaining space.
         const core::coord_t flex = std::max<core::coord_t>(1, it.flex);
         if (flex_sum > 0) {
-          if (i + 1 == items.size()) {
-            // Assign all leftover space to the last item to avoid drift.
+          if (i == last_flex_index) {
+            // Assign all leftover space to the last flex item to avoid drift.
             main = remaining - used_flex;
           }
           else {
