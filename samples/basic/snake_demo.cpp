@@ -1,0 +1,372 @@
+// samples/basic/snake_demo.cpp
+//
+// Simple Snake game demo using the Glyph renderer and WinInput.
+
+#include <algorithm>
+#include <chrono>
+#include <deque>
+#include <iostream>
+#include <random>
+#include <string>
+#include <thread>
+
+#include "glyph/core/cell.h"
+#include "glyph/core/event.h"
+#include "glyph/core/geometry.h"
+#include "glyph/core/style.h"
+#include "glyph/input/win32/win_input.h"
+#include "glyph/render/ansi/ansi_renderer.h"
+#include "glyph/render/terminal.h"
+#include "glyph/view/frame.h"
+
+namespace {
+
+  enum class Dir {
+    Up,
+    Down,
+    Left,
+    Right,
+  };
+
+  struct GameState {
+    std::deque<glyph::core::Point> snake{};
+    glyph::core::Point             food{};
+    Dir                            dir    = Dir::Right;
+    bool                           alive  = true;
+    bool                           paused = false;
+    int                            score  = 0;
+  };
+
+  struct Grid {
+    glyph::core::coord_t w = 0;
+    glyph::core::coord_t h = 0;
+    glyph::core::Point   origin{};
+  };
+
+  glyph::core::Point step(glyph::core::Point p, Dir d) {
+    using glyph::core::coord_t;
+    switch (d) {
+    case Dir::Up:
+      return {p.x, coord_t(p.y - 1)};
+    case Dir::Down:
+      return {p.x, coord_t(p.y + 1)};
+    case Dir::Left:
+      return {coord_t(p.x - 1), p.y};
+    case Dir::Right:
+      return {coord_t(p.x + 1), p.y};
+    }
+    return p;
+  }
+
+  bool is_opposite(Dir a, Dir b) {
+    return (a == Dir::Up && b == Dir::Down) ||
+           (a == Dir::Down && b == Dir::Up) ||
+           (a == Dir::Left && b == Dir::Right) ||
+           (a == Dir::Right && b == Dir::Left);
+  }
+
+  bool
+  contains(const std::deque<glyph::core::Point> &snake, glyph::core::Point p) {
+    return std::find(snake.begin(), snake.end(), p) != snake.end();
+  }
+
+  glyph::core::Point random_empty_cell(
+      std::mt19937                         &rng,
+      const Grid                           &grid,
+      const std::deque<glyph::core::Point> &snake) {
+    std::uniform_int_distribution<int> dist_x(0, grid.w - 1);
+    std::uniform_int_distribution<int> dist_y(0, grid.h - 1);
+
+    for (int attempts = 0; attempts < 256; ++attempts) {
+      glyph::core::Point p{
+          static_cast<glyph::core::coord_t>(dist_x(rng)),
+          static_cast<glyph::core::coord_t>(dist_y(rng))};
+      if (!contains(snake, p)) {
+        return p;
+      }
+    }
+
+    for (glyph::core::coord_t y = 0; y < grid.h; ++y) {
+      for (glyph::core::coord_t x = 0; x < grid.w; ++x) {
+        glyph::core::Point p{x, y};
+        if (!contains(snake, p)) {
+          return p;
+        }
+      }
+    }
+
+    return {0, 0};
+  }
+
+  void reset_game(GameState &state, const Grid &grid, std::mt19937 &rng) {
+    state.snake.clear();
+    state.score  = 0;
+    state.dir    = Dir::Right;
+    state.alive  = true;
+    state.paused = false;
+
+    const auto cx = grid.w / 2;
+    const auto cy = grid.h / 2;
+    state.snake.push_back({cx, cy});
+    state.snake.push_back({glyph::core::coord_t(cx - 1), cy});
+    state.snake.push_back({glyph::core::coord_t(cx - 2), cy});
+
+    state.food = random_empty_cell(rng, grid, state.snake);
+  }
+
+  void draw_text(
+      glyph::view::Frame      &frame,
+      glyph::core::Point       p,
+      const std::string       &text,
+      const glyph::core::Cell &cell) {
+    auto x = p.x;
+    for (char ch : text) {
+      if (x >= frame.size().w) {
+        break;
+      }
+      glyph::core::Cell c = cell;
+      c.ch                = static_cast<char32_t>(ch);
+      frame.set({x, p.y}, c);
+      x = glyph::core::coord_t(x + 1);
+    }
+  }
+
+  void draw_border(
+      glyph::view::Frame      &frame,
+      glyph::core::Rect        area,
+      const glyph::core::Cell &cell) {
+    if (area.empty()) {
+      return;
+    }
+    const auto x0 = area.left();
+    const auto y0 = area.top();
+    const auto x1 = area.right() - 1;
+    const auto y1 = area.bottom() - 1;
+
+    for (glyph::core::coord_t x = x0; x <= x1; ++x) {
+      frame.set({x, y0}, cell);
+      frame.set({x, y1}, cell);
+    }
+    for (glyph::core::coord_t y = y0; y <= y1; ++y) {
+      frame.set({x0, y}, cell);
+      frame.set({x1, y}, cell);
+    }
+  }
+
+} // namespace
+
+int main() {
+  using namespace glyph;
+  using namespace std::chrono_literals;
+
+  render::TerminalSession session{std::cout};
+  render::AnsiRenderer    renderer{std::cout};
+  input::WinInput         input{};
+  input.set_mode(input::InputMode::Raw);
+
+  std::mt19937 rng(
+      static_cast<std::uint32_t>(
+          std::chrono::steady_clock::now().time_since_epoch().count()));
+
+  render::TerminalSize last{};
+  GameState            state{};
+  bool                 dirty       = true;
+  bool                 initialized = false;
+
+  auto next_tick = std::chrono::steady_clock::now();
+
+  for (;;) {
+    const auto term   = render::get_terminal_size();
+    const auto width  = term.valid ? term.cols : 80;
+    const auto height = term.valid ? term.rows : 24;
+
+    if (width <= 0 || height <= 0) {
+      std::this_thread::sleep_for(20ms);
+      continue;
+    }
+
+    const bool size_changed =
+        width != last.cols || height != last.rows || term.valid != last.valid;
+    if (size_changed) {
+      last.cols   = width;
+      last.rows   = height;
+      last.valid  = term.valid;
+      dirty       = true;
+      initialized = false;
+    }
+
+    const Grid grid{
+        glyph::core::coord_t(width - 2),
+        glyph::core::coord_t(height - 3),
+        {1, 2}};
+
+    if (!initialized && grid.w >= 5 && grid.h >= 5) {
+      reset_game(state, grid, rng);
+      initialized = true;
+      dirty       = true;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (initialized && now >= next_tick) {
+      next_tick = now + 60ms;
+      if (state.alive && !state.paused) {
+        const auto next = step(state.snake.front(), state.dir);
+        if (next.x < 0 || next.y < 0 || next.x >= grid.w || next.y >= grid.h ||
+            contains(state.snake, next)) {
+          state.alive = false;
+        }
+        else {
+          state.snake.push_front(next);
+          if (next.x == state.food.x && next.y == state.food.y) {
+            state.score += 1;
+            state.food = random_empty_cell(rng, grid, state.snake);
+          }
+          else {
+            state.snake.pop_back();
+          }
+        }
+        dirty = true;
+      }
+    }
+
+    if (auto ev = input.poll(); !std::holds_alternative<std::monostate>(ev)) {
+      if (auto key = std::get_if<core::KeyEvent>(&ev)) {
+        if (key->code == core::KeyCode::Esc) {
+          break;
+        }
+        if (key->code == core::KeyCode::Char) {
+          const char32_t ch = key->ch;
+          if (ch == U'q' || ch == U'Q') {
+            break;
+          }
+          if (ch == U'p' || ch == U'P') {
+            state.paused = !state.paused;
+            dirty        = true;
+          }
+          if (ch == U'r' || ch == U'R') {
+            if (grid.w >= 5 && grid.h >= 5) {
+              reset_game(state, grid, rng);
+              initialized = true;
+              dirty       = true;
+            }
+          }
+          if (ch == U'w' || ch == U'W') {
+            if (!is_opposite(state.dir, Dir::Up)) {
+              state.dir = Dir::Up;
+              dirty     = true;
+            }
+          }
+          if (ch == U's' || ch == U'S') {
+            if (!is_opposite(state.dir, Dir::Down)) {
+              state.dir = Dir::Down;
+              dirty     = true;
+            }
+          }
+          if (ch == U'a' || ch == U'A') {
+            if (!is_opposite(state.dir, Dir::Left)) {
+              state.dir = Dir::Left;
+              dirty     = true;
+            }
+          }
+          if (ch == U'd' || ch == U'D') {
+            if (!is_opposite(state.dir, Dir::Right)) {
+              state.dir = Dir::Right;
+              dirty     = true;
+            }
+          }
+        }
+        if (key->code == core::KeyCode::Up &&
+            !is_opposite(state.dir, Dir::Up)) {
+          state.dir = Dir::Up;
+          dirty     = true;
+        }
+        if (key->code == core::KeyCode::Down &&
+            !is_opposite(state.dir, Dir::Down)) {
+          state.dir = Dir::Down;
+          dirty     = true;
+        }
+        if (key->code == core::KeyCode::Left &&
+            !is_opposite(state.dir, Dir::Left)) {
+          state.dir = Dir::Left;
+          dirty     = true;
+        }
+        if (key->code == core::KeyCode::Right &&
+            !is_opposite(state.dir, Dir::Right)) {
+          state.dir = Dir::Right;
+          dirty     = true;
+        }
+      }
+    }
+
+    if (!dirty) {
+      std::this_thread::sleep_for(1ms);
+      continue;
+    }
+
+    view::Frame frame{core::Size{width, height}};
+    frame.fill(core::Cell::from_char(U' '));
+
+    if (width < 20 || height < 8) {
+      draw_text(
+          frame,
+          {0, 0},
+          "Terminal too small for Snake.",
+          core::Cell::from_char(U'!'));
+      renderer.render(frame);
+      dirty = false;
+      continue;
+    }
+
+    if (grid.w < 5 || grid.h < 5) {
+      draw_text(
+          frame,
+          {0, 0},
+          "Terminal too small for Snake.",
+          core::Cell::from_char(U'!'));
+      renderer.render(frame);
+      dirty       = false;
+      initialized = false;
+      continue;
+    }
+
+    const core::Style snake_style =
+        core::Style::with_fg(core::Style::rgb(100, 255, 100));
+    const core::Style head_style =
+        core::Style::with_fg(core::Style::rgb(255, 220, 80));
+    const core::Style food_style =
+        core::Style::with_fg(core::Style::rgb(255, 100, 100));
+    const core::Cell border_cell = core::Cell::from_char(U'#');
+    const core::Cell head_cell   = core::Cell::from_char(U'O', head_style);
+    const core::Cell body_cell   = core::Cell::from_char(U'o', snake_style);
+    const core::Cell food_cell   = core::Cell::from_char(U'*', food_style);
+
+    std::string status = "Score: " + std::to_string(state.score) +
+                         "  [Arrows/WASD]  P:Pause  R:Reset  Q/Esc:Quit";
+    if (!state.alive) {
+      status += "  GAME OVER";
+    }
+    draw_text(frame, {0, 0}, status, core::Cell::from_char(U' '));
+
+    const auto board =
+        core::Rect{core::Point{0, 1}, core::Size{width, height - 1}};
+    draw_border(frame, board, border_cell);
+
+    for (std::size_t i = 0; i < state.snake.size(); ++i) {
+      const auto &seg = state.snake[i];
+      const auto  p   = core::Point{
+          core::coord_t(grid.origin.x + seg.x),
+          core::coord_t(grid.origin.y + seg.y)};
+      frame.set(p, i == 0 ? head_cell : body_cell);
+    }
+
+    const auto food_p = core::Point{
+        core::coord_t(grid.origin.x + state.food.x),
+        core::coord_t(grid.origin.y + state.food.y)};
+    frame.set(food_p, food_cell);
+
+    renderer.render(frame);
+    dirty = false;
+  }
+
+  return 0;
+}

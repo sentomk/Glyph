@@ -163,3 +163,11 @@ add_executable(components_demo
 target_link_libraries(components_demo
   PRIVATE glyph::glyph
 )
+
+# snake_demo
+add_executable(snake_demo
+  samples/basic/snake_demo.cpp
+)
+target_link_libraries(snake_demo
+  PRIVATE glyph::glyph
+)
