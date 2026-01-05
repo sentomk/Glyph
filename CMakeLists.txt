@@ -66,6 +66,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   # view/components
   include/glyph/view/components/border.h
   include/glyph/view/components/fill.h
+  include/glyph/view/components/inset.h
   include/glyph/view/components/label.h
   include/glyph/view/components/panel.h
   include/glyph/view/components/stack.h
