@@ -17,10 +17,12 @@ namespace glyph::core {
   struct Cell final {
     char32_t     ch    = U' '; // single codepoint placeholder
     std::uint8_t width = 1;    // 0/1/2 columns
+    std::uint8_t _pad0 = 0;
+    std::uint16_t _pad1 = 0;
     Style        style{};
 
     static constexpr Cell from_char(char32_t c, Style s = {}) noexcept {
-      return Cell{c, cell_width(c), s};
+      return Cell{c, cell_width(c), 0, 0, s};
     }
 
     friend constexpr bool operator==(Cell a, Cell b) noexcept {
