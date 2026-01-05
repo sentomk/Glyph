@@ -55,6 +55,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 
   # render/
   include/glyph/render/render.h
+  include/glyph/render/terminal.h
   include/glyph/render/ansi/ansi_renderer.h
   include/glyph/render/debug/debug_renderer.h
 
@@ -88,6 +89,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 # ------------------------------------------------------------
 
 add_library(glyph
+  src/render/terminal.cpp
   src/render/debug/debug_renderer.cpp
   src/render/ansi/ansi_renderer.cpp
   src/win32/win_input.cpp
