@@ -8,13 +8,14 @@
 //   - Clip safely to the given area.
 //
 // Behavior notes:
-//   - If wrap_ is false, text is treated as a single logical line.
+//   - WrapMode::None treats text as a single logical line.
 //   - Ellipsis is applied only when wrapping is disabled.
 //   - Width is computed per codepoint using core::cell_width().
 
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,6 +35,13 @@ namespace glyph::view {
   class LabelView : public View {
 
   public:
+    // Wrapping policy for multi-line layout.
+    enum class WrapMode : std::uint8_t {
+      None,
+      Char,
+      Word,
+    };
+
     explicit LabelView(std::u32string text = U"",
                        core::Cell     cell = core::Cell::from_char(U' '))
         : text_(std::move(text)), cell_(cell) {
@@ -57,7 +65,12 @@ namespace glyph::view {
 
     // Enable simple auto-wrap by available width.
     void set_wrap(bool enabled) {
-      wrap_ = enabled;
+      wrap_mode_ = enabled ? WrapMode::Char : WrapMode::None;
+    }
+
+    // Select wrap strategy for multi-line rendering.
+    void set_wrap_mode(WrapMode mode) {
+      wrap_mode_ = mode;
     }
 
     // Enable ellipsis for single-line overflow.
@@ -164,11 +177,35 @@ namespace glyph::view {
     }
 
     // Append one line, optionally wrapped to max_w.
+    static bool is_break_char(char32_t ch) noexcept {
+      return ch == U' ' || ch == U'\t';
+    }
+
+    static void trim_leading_space(std::u32string &text) {
+      std::size_t start = 0;
+      while (start < text.size() && is_break_char(text[start])) {
+        ++start;
+      }
+      if (start > 0) {
+        text.erase(0, start);
+      }
+    }
+
+    static void trim_trailing_space(std::u32string &text) {
+      std::size_t end = text.size();
+      while (end > 0 && is_break_char(text[end - 1])) {
+        --end;
+      }
+      if (end < text.size()) {
+        text.erase(end);
+      }
+    }
+
     static void append_wrapped_line(std::vector<std::u32string> &out,
                                     const std::u32string       &line,
                                     core::coord_t max_w,
-                                    bool          wrap) {
-      if (!wrap || max_w <= 0) {
+                                    WrapMode      mode) {
+      if (mode == WrapMode::None || max_w <= 0) {
         out.push_back(line);
         return;
       }
@@ -181,6 +218,54 @@ namespace glyph::view {
       std::u32string current;
       core::coord_t  width = 0;
 
+      if (mode == WrapMode::Char) {
+        for (char32_t ch : line) {
+          const core::coord_t w = core::coord_t(core::cell_width(ch));
+          if (w <= 0) {
+            continue;
+          }
+
+          if (w > max_w) {
+            continue;
+          }
+
+          if (width + w > max_w) {
+            out.push_back(current);
+            current.clear();
+            width = 0;
+          }
+
+          current.push_back(ch);
+          width = core::coord_t(width + w);
+        }
+
+        out.push_back(current);
+        return;
+      }
+
+      std::size_t last_break = std::u32string::npos;
+
+      auto refresh_last_break = [&]() {
+        last_break = std::u32string::npos;
+        for (std::size_t i = 0; i < current.size(); ++i) {
+          if (is_break_char(current[i])) {
+            last_break = i + 1;
+          }
+        }
+      };
+
+      auto flush_at_break = [&]() {
+        std::u32string head = current.substr(0, last_break);
+        trim_trailing_space(head);
+        out.push_back(head);
+
+        std::u32string tail = current.substr(last_break);
+        trim_leading_space(tail);
+        current = std::move(tail);
+        width = text_width(current);
+        refresh_last_break();
+      };
+
       for (char32_t ch : line) {
         const core::coord_t w = core::coord_t(core::cell_width(ch));
         if (w <= 0) {
@@ -191,14 +276,29 @@ namespace glyph::view {
           continue;
         }
 
-        if (width + w > max_w) {
-          out.push_back(current);
-          current.clear();
-          width = 0;
-        }
-
         current.push_back(ch);
         width = core::coord_t(width + w);
+        if (is_break_char(ch)) {
+          last_break = current.size();
+        }
+
+        if (width > max_w) {
+          if (last_break != std::u32string::npos) {
+            flush_at_break();
+          }
+          else {
+            const char32_t overflow = current.back();
+            current.pop_back();
+            trim_trailing_space(current);
+            out.push_back(current);
+            current.clear();
+            width = 0;
+
+            current.push_back(overflow);
+            width = core::coord_t(width + w);
+            refresh_last_break();
+          }
+        }
       }
 
       out.push_back(current);
@@ -212,14 +312,14 @@ namespace glyph::view {
 
       for (char32_t ch : text) {
         if (ch == U'\n') {
-          append_wrapped_line(lines, current, max_w, wrap_);
+          append_wrapped_line(lines, current, max_w, wrap_mode_);
           current.clear();
           continue;
         }
         current.push_back(ch);
       }
 
-      append_wrapped_line(lines, current, max_w, wrap_);
+      append_wrapped_line(lines, current, max_w, wrap_mode_);
       return lines;
     }
 
@@ -231,7 +331,8 @@ namespace glyph::view {
         return;
       }
 
-      const bool          apply_ellipsis = ellipsis_ && !wrap_ && line_w > max_w;
+      const bool          apply_ellipsis =
+          ellipsis_ && wrap_mode_ == WrapMode::None && line_w > max_w;
       const core::coord_t ellipsis_w =
           apply_ellipsis ? std::min<core::coord_t>(3, max_w) : 0;
       const core::coord_t content_w = apply_ellipsis
@@ -292,7 +393,7 @@ namespace glyph::view {
     core::Cell     cell_{core::Cell::from_char(U' ')};
     layout::AlignH align_h_ = layout::AlignH::Left;
     layout::AlignV align_v_ = layout::AlignV::Top;
-    bool           wrap_    = false;
+    WrapMode       wrap_mode_ = WrapMode::None;
     bool           ellipsis_ = false;
   };
 

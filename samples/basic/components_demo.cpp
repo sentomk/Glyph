@@ -72,7 +72,12 @@ namespace {
           view::LabelView label(text_);
           label.set_align(
               view::layout::AlignH::Left, view::layout::AlignV::Top);
-          label.set_wrap(wrap_);
+          if (wrap_) {
+            label.set_wrap_mode(view::LabelView::WrapMode::Word);
+          }
+          else {
+            label.set_wrap(false);
+          }
           label.set_ellipsis(ellipsis_);
           label.render(f, inner);
         }
