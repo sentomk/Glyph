@@ -12,6 +12,7 @@
 #include "glyph/core/diff.h"
 #include "glyph/view/frame.h"
 #include <ostream>
+#include <sstream>
 
 namespace glyph::render {
 
@@ -146,11 +147,11 @@ namespace glyph::render {
     const auto size = frame.size();
     const auto cur  = frame.view();
 
-    // First frame or size change: full redraw.
+    // First frame or size change: full redraw into a buffer to avoid scroll.
     if (!has_prev_ || prev_.size() != size) {
-      ansi_clear(out_);
-      ansi_home(out_);
-      ansi_reset(out_);
+      std::ostringstream out;
+      out << "\x1b[2J" << "\x1b[H" << "\x1b[0m";
+      ansi_wrap(out, false);
 
       glyph::core::Style current{};
       bool               has_current = false;
@@ -160,27 +161,31 @@ namespace glyph::render {
           const auto &cell = cur.at(x, y);
 
           if (cell.width == 0) {
-            out_ << ' ';
+            out << ' ';
             continue;
           }
 
           if (!has_current || cell.style != current) {
-            ansi_apply_style(out_, cell.style);
+            ansi_apply_style(out, cell.style);
             current     = cell.style;
             has_current = true;
           }
 
-          out_ << to_ascii(cell);
+          out << to_ascii(cell);
 
           if (cell.width == 2) {
-            out_ << ' ';
+            out << ' ';
             ++x;
           }
         }
-        out_ << "\r\n";
+        if (y + 1 < size.h) {
+          out << "\r\n";
+        }
       }
 
-      ansi_reset(out_);
+      ansi_wrap(out, true);
+      ansi_reset(out);
+      out_ << out.str();
 
       prev_.resize(size);
       prev_.blit(cur, glyph::core::Point{0, 0});

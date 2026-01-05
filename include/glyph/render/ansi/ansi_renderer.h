@@ -4,7 +4,8 @@
 //
 // Responsibilities:
 //   - Consume a view::Frame and emit ANSI sequences + glyphs.
-//   - Keep output deterministic and stateless for now (full-frame paint).
+//   - Full redraw on first frame or size change.
+//   - Diff-based updates on dirty lines between frames.
 
 #pragma once
 
