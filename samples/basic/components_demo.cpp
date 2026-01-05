@@ -10,7 +10,7 @@
 #include "glyph/view/frame.h"
 #include "glyph/view/view.h"
 
-#include "glyph/view/components/border.h"
+#include "glyph/view/components/panel.h"
 #include "glyph/view/components/stack.h"
 #include "glyph/view/components/fill.h"
 #include "glyph/view/components/label.h"
@@ -20,41 +20,11 @@ namespace {
 
   using namespace glyph;
 
-  class BorderedFillView final : public view::View {
-  public:
-    BorderedFillView(view::FillView fill, view::BorderView border)
-        : fill_(fill), border_(border) {
-    }
-
-    void render(view::Frame &f, core::Rect area) const override {
-      if (area.empty())
-        return;
-
-      fill_.render(f, area);
-      border_.render(f, area);
-
-      const auto inner =
-          view::layout::inset_rect(area, view::layout::Insets::all(1));
-      fill_.render(f, inner);
-    }
-
-  private:
-    view::FillView   fill_;
-    view::BorderView border_;
-  };
-
   class RightPaneView final : public view::View {
   public:
-    RightPaneView(view::FillView fill, view::BorderView border)
-        : fill_(fill), border_(border) {
-    }
-
     void render(view::Frame &f, core::Rect area) const override {
       if (area.empty())
         return;
-
-      fill_.render(f, area);
-      border_.render(f, area);
 
       class LabelPaneView final : public view::View {
       public:
@@ -103,10 +73,6 @@ namespace {
           1);
       stack.render(f, area);
     }
-
-  private:
-    view::FillView   fill_;
-    view::BorderView border_;
   };
 
 } // namespace
@@ -122,18 +88,27 @@ int main() {
 
   view::FillView   fill_left(core::Cell::from_char(U'L'));
   view::FillView   fill_mid(core::Cell::from_char(U' '));
-  view::BorderView border_mid(core::Cell::from_char(U'#'));
-  BorderedFillView mid(fill_mid, border_mid);
+  RightPaneView    right_content;
 
-  view::FillView   fill_right(core::Cell::from_char(U' '));
-  view::BorderView border_right(core::Cell::from_char(U'='));
-  RightPaneView    right(fill_right, border_right);
+  view::PanelView mid_panel(&fill_mid);
+  mid_panel.set_fill(core::Cell::from_char(U' '));
+  mid_panel.set_border(core::Cell::from_char(U'#'));
+  mid_panel.set_padding(view::layout::Insets::all(1));
+  mid_panel.set_draw_fill(true);
+  mid_panel.set_draw_border(true);
+
+  view::PanelView right_panel(&right_content);
+  right_panel.set_fill(core::Cell::from_char(U' '));
+  right_panel.set_border(core::Cell::from_char(U'='));
+  right_panel.set_padding(view::layout::Insets::all(1));
+  right_panel.set_draw_fill(true);
+  right_panel.set_draw_border(true);
 
   auto layout = view::HStack(
       {
           view::StackChild{.view = &fill_left, .weight = 1},
-          view::StackChild{.view = &mid, .weight = 1},
-          view::StackChild{.view = &right, .weight = 1},
+          view::StackChild{.view = &mid_panel, .weight = 1},
+          view::StackChild{.view = &right_panel, .weight = 1},
       },
       1);
 
