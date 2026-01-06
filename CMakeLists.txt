@@ -40,6 +40,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 
   # core/
   include/glyph/core/buffer.h
+  include/glyph/core/color.h
   include/glyph/core/cell.h
   include/glyph/core/diff.h
   include/glyph/core/event.h

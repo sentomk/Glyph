@@ -6,6 +6,8 @@
 #pragma once
 #include <cstdint>
 
+#include "color.h"
+
 namespace glyph::core {
 
   // Compact style model (12 bytes) with true-color support.
@@ -37,11 +39,19 @@ namespace glyph::core {
       return *this;
     }
 
+    constexpr Style &fg(Color color) noexcept {
+      return fg(color.value);
+    }
+
     // Fluent API: set explicit background color.
     constexpr Style &bg(std::uint32_t rgb_value) noexcept {
       bg_rgb = rgb_value;
       flags = static_cast<std::uint16_t>(flags & ~FlagBgDefault);
       return *this;
+    }
+
+    constexpr Style &bg(Color color) noexcept {
+      return bg(color.value);
     }
 
     // Fluent API: reset to terminal default colors.
@@ -97,6 +107,10 @@ namespace glyph::core {
       return s;
     }
 
+    static constexpr Style with_fg(Color color) noexcept {
+      return with_fg(color.value);
+    }
+
     // Create a style with an explicit background color.
     // Note: other fields are left at defaults.
     static constexpr Style with_bg(std::uint32_t rgb_value) noexcept {
@@ -104,6 +118,10 @@ namespace glyph::core {
       s.bg_rgb = rgb_value;
       s.flags = static_cast<std::uint16_t>(s.flags & ~FlagBgDefault);
       return s;
+    }
+
+    static constexpr Style with_bg(Color color) noexcept {
+      return with_bg(color.value);
     }
 
     // Create a style that uses the terminal default foreground.

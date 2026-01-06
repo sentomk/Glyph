@@ -224,13 +224,13 @@ namespace {
       }
 
       const auto snake_style =
-          glyph::core::Style{}.fg(glyph::core::Style::rgb(100, 255, 100));
+          glyph::core::Style{}.fg(glyph::core::colors::Lime);
       const auto head_style =
-          glyph::core::Style{}.fg(glyph::core::Style::rgb(255, 220, 80));
+          glyph::core::Style{}.fg(glyph::core::colors::Gold);
       const auto food_style =
-          glyph::core::Style{}.fg(glyph::core::Style::rgb(255, 100, 100));
+          glyph::core::Style{}.fg(glyph::core::colors::Red);
       const auto obstacle_style =
-          glyph::core::Style{}.fg(glyph::core::Style::rgb(160, 160, 160));
+          glyph::core::Style{}.fg(glyph::core::colors::DarkGray);
 
       const auto head_cell     = glyph::core::Cell(U'O', head_style);
       const auto body_cell     = glyph::core::Cell(U'o', snake_style);
