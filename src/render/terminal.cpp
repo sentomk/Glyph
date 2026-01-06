@@ -6,6 +6,8 @@
 
 #include <ostream>
 
+#include "glyph/view/frame.h"
+
 #if defined(_WIN32)
 #include <windows.h>
 #else
@@ -51,6 +53,13 @@ namespace glyph::render {
     return out;
   }
 
+  core::Size terminal_frame_size(core::Size fallback) {
+    const auto term = get_terminal_size();
+    const auto width = term.valid ? term.cols : fallback.w;
+    const auto height = term.valid ? term.rows : fallback.h;
+    return core::Size{width, height};
+  }
+
   TerminalSession::TerminalSession(std::ostream &out,
                                    TerminalSessionOptions options)
       : out_(out), options_(options) {
@@ -69,6 +78,22 @@ namespace glyph::render {
     if (options_.use_alt_screen) {
       out_ << "\x1b[?1049l";
     }
+  }
+
+  TerminalApp::TerminalApp(std::ostream &out, TerminalSessionOptions options)
+      : session_(out, options), renderer_(out) {
+  }
+
+  TerminalSize TerminalApp::size() const {
+    return get_terminal_size();
+  }
+
+  core::Size TerminalApp::frame_size(core::Size fallback) const {
+    return terminal_frame_size(fallback);
+  }
+
+  void TerminalApp::render(const view::Frame &frame) {
+    renderer_.render(frame);
   }
 
 } // namespace glyph::render

@@ -5,11 +5,18 @@
 // Responsibilities:
 //   - Query current terminal size in character cells.
 //   - Toggle alternate screen + cursor visibility with RAII.
+//   - Provide a lightweight app wrapper for size + render.
 
 #pragma once
 
+#include "glyph/core/geometry.h"
 #include "glyph/core/types.h"
+#include "glyph/render/ansi/ansi_renderer.h"
 #include <iosfwd>
+
+namespace glyph::view {
+  class Frame;
+}
 
 namespace glyph::render {
 
@@ -27,6 +34,11 @@ namespace glyph::render {
   // Values are in terminal character cells, not pixels.
   // ------------------------------------------------------------
   TerminalSize get_terminal_size();
+
+  // ------------------------------------------------------------
+  // Compute a frame size using current terminal size or fallback.
+  // ------------------------------------------------------------
+  core::Size terminal_frame_size(core::Size fallback);
 
   // ------------------------------------------------------------
   // TerminalSessionOptions
@@ -52,6 +64,25 @@ namespace glyph::render {
   private:
     std::ostream          &out_;
     TerminalSessionOptions options_{};
+  };
+
+  // ------------------------------------------------------------
+  // TerminalApp
+  // ------------------------------------------------------------
+  // Convenience wrapper that owns a session + ANSI renderer.
+  class TerminalApp final {
+  public:
+    explicit TerminalApp(std::ostream &out,
+                         TerminalSessionOptions options = {});
+
+    TerminalSize size() const;
+    core::Size   frame_size(core::Size fallback = {80, 24}) const;
+
+    void render(const view::Frame &frame);
+
+  private:
+    TerminalSession session_;
+    AnsiRenderer    renderer_;
   };
 
 } // namespace glyph::render
