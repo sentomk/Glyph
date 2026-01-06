@@ -201,8 +201,7 @@ namespace {
       if (!state_->alive) {
         status += "  GAME OVER";
       }
-      glyph::view::draw_text(
-          canvas, {0, 0}, status, glyph::core::Cell::from_char(U' '));
+      glyph::view::draw_text(canvas, {0, 0}, status, glyph::core::Cell(U' '));
     }
 
   private:
@@ -233,11 +232,10 @@ namespace {
       const auto obstacle_style =
           glyph::core::Style{}.fg(glyph::core::Style::rgb(160, 160, 160));
 
-      const auto head_cell = glyph::core::Cell::from_char(U'O', head_style);
-      const auto body_cell = glyph::core::Cell::from_char(U'o', snake_style);
-      const auto food_cell = glyph::core::Cell::from_char(U'*', food_style);
-      const auto obstacle_cell =
-          glyph::core::Cell::from_char(U'X', obstacle_style);
+      const auto head_cell     = glyph::core::Cell(U'O', head_style);
+      const auto body_cell     = glyph::core::Cell(U'o', snake_style);
+      const auto food_cell     = glyph::core::Cell(U'*', food_style);
+      const auto obstacle_cell = glyph::core::Cell(U'X', obstacle_style);
 
       for (std::size_t i = 0; i < state_->snake.size(); ++i) {
         const auto &seg = state_->snake[i];
@@ -409,14 +407,11 @@ int main() {
     }
 
     view::Frame frame{core::Size{width, height}};
-    frame.fill(core::Cell::from_char(U' '));
+    frame.fill(core::Cell(U' '));
 
     if (width < 20 || height < 8) {
       view::draw_text(
-          frame,
-          {0, 0},
-          "Terminal too small for Snake.",
-          core::Cell::from_char(U'!'));
+          frame, {0, 0}, "Terminal too small for Snake.", core::Cell(U'!'));
       app.render(frame);
       dirty = false;
       continue;
@@ -424,10 +419,7 @@ int main() {
 
     if (grid.w < 5 || grid.h < 5) {
       view::draw_text(
-          frame,
-          {0, 0},
-          "Terminal too small for Snake.",
-          core::Cell::from_char(U'!'));
+          frame, {0, 0}, "Terminal too small for Snake.", core::Cell(U'!'));
       app.render(frame);
       dirty       = false;
       initialized = false;
@@ -438,8 +430,8 @@ int main() {
     SnakeView      snake_view(&state);
 
     view::PanelView game_panel(&snake_view);
-    game_panel.set_fill(core::Cell::from_char(U' '));
-    game_panel.set_border(core::Cell::from_char(U'#'));
+    game_panel.set_fill(core::Cell(U' '));
+    game_panel.set_border(core::Cell(U'#'));
     game_panel.set_padding(kGamePadding);
     game_panel.set_draw_fill(true);
     game_panel.set_draw_border(true);

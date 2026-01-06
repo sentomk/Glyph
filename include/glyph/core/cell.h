@@ -21,8 +21,14 @@ namespace glyph::core {
     std::uint16_t _pad1 = 0;
     Style        style{};
 
+    constexpr Cell() = default;
+
+    constexpr Cell(char32_t c, Style s = {}) noexcept
+        : ch(c), width(static_cast<std::uint8_t>(cell_width(c))), style(s) {
+    }
+
     static constexpr Cell from_char(char32_t c, Style s = {}) noexcept {
-      return Cell{c, cell_width(c), 0, 0, s};
+      return Cell(c, s);
     }
 
     friend constexpr bool operator==(Cell a, Cell b) noexcept {
