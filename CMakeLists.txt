@@ -166,6 +166,14 @@ target_link_libraries(components_demo
   PRIVATE glyph::glyph
 )
 
+# ui_demo
+add_executable(aurora_dashboard
+  samples/ui/aurora_dashboard.cpp
+)
+target_link_libraries(aurora_dashboard
+  PRIVATE glyph::glyph
+)
+
 # snake_demo
 add_executable(snake_demo
   samples/basic/snake_demo.cpp
