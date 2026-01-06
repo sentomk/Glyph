@@ -50,7 +50,7 @@ namespace {
     glyph::core::coord_t h = 0;
   };
 
-  constexpr glyph::core::coord_t kStatusHeight = 1;
+  constexpr glyph::core::coord_t        kStatusHeight = 1;
   constexpr glyph::view::layout::Insets kGamePadding =
       glyph::view::layout::Insets::all(1);
 
@@ -174,10 +174,10 @@ namespace {
 
   Grid grid_from_frame(glyph::core::Size size) {
     const auto game_h = glyph::core::coord_t(size.h - kStatusHeight);
-    const auto inner_w = glyph::core::coord_t(
-        size.w - (kGamePadding.left + kGamePadding.right));
-    const auto inner_h = glyph::core::coord_t(
-        game_h - (kGamePadding.top + kGamePadding.bottom));
+    const auto inner_w =
+        glyph::core::coord_t(size.w - (kGamePadding.left + kGamePadding.right));
+    const auto inner_h =
+        glyph::core::coord_t(game_h - (kGamePadding.top + kGamePadding.bottom));
     return Grid{
         std::max<glyph::core::coord_t>(0, inner_w),
         std::max<glyph::core::coord_t>(0, inner_h),
@@ -194,15 +194,15 @@ namespace {
         return;
       }
 
-      auto canvas = f.sub_frame(area);
+      auto        canvas = f.sub_frame(area);
       std::string status = "Score: " + std::to_string(state_->score) +
                            "  Speed: " + std::to_string(state_->tick_ms) +
                            "ms  [Arrows/WASD]  P:Pause  R:Reset  Q/Esc:Quit";
       if (!state_->alive) {
         status += "  GAME OVER";
       }
-      glyph::view::draw_text(canvas, {0, 0}, status,
-                             glyph::core::Cell::from_char(U' '));
+      glyph::view::draw_text(
+          canvas, {0, 0}, status, glyph::core::Cell::from_char(U' '));
     }
 
   private:
@@ -225,20 +225,17 @@ namespace {
       }
 
       const auto snake_style =
-          glyph::core::Style::with_fg(glyph::core::Style::rgb(100, 255, 100));
+          glyph::core::Style{}.fg(glyph::core::Style::rgb(100, 255, 100));
       const auto head_style =
-          glyph::core::Style::with_fg(glyph::core::Style::rgb(255, 220, 80));
+          glyph::core::Style{}.fg(glyph::core::Style::rgb(255, 220, 80));
       const auto food_style =
-          glyph::core::Style::with_fg(glyph::core::Style::rgb(255, 100, 100));
+          glyph::core::Style{}.fg(glyph::core::Style::rgb(255, 100, 100));
       const auto obstacle_style =
-          glyph::core::Style::with_fg(glyph::core::Style::rgb(160, 160, 160));
+          glyph::core::Style{}.fg(glyph::core::Style::rgb(160, 160, 160));
 
-      const auto head_cell =
-          glyph::core::Cell::from_char(U'O', head_style);
-      const auto body_cell =
-          glyph::core::Cell::from_char(U'o', snake_style);
-      const auto food_cell =
-          glyph::core::Cell::from_char(U'*', food_style);
+      const auto head_cell = glyph::core::Cell::from_char(U'O', head_style);
+      const auto body_cell = glyph::core::Cell::from_char(U'o', snake_style);
+      const auto food_cell = glyph::core::Cell::from_char(U'*', food_style);
       const auto obstacle_cell =
           glyph::core::Cell::from_char(U'X', obstacle_style);
 

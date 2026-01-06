@@ -72,7 +72,7 @@ namespace glyph::render {
       out << ";39";
     }
     else {
-      const std::uint32_t rgb = s.fg;
+      const std::uint32_t rgb = s.fg_rgb;
       const std::uint32_t r   = (rgb >> 16) & 0xFFu;
       const std::uint32_t g   = (rgb >> 8) & 0xFFu;
       const std::uint32_t b   = rgb & 0xFFu;
@@ -83,7 +83,7 @@ namespace glyph::render {
       out << ";49";
     }
     else {
-      const std::uint32_t rgb = s.bg;
+      const std::uint32_t rgb = s.bg_rgb;
       const std::uint32_t r   = (rgb >> 16) & 0xFFu;
       const std::uint32_t g   = (rgb >> 8) & 0xFFu;
       const std::uint32_t b   = rgb & 0xFFu;

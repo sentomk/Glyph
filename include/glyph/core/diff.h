@@ -52,8 +52,8 @@ namespace glyph::core {
 
     fnv_add(h, std::uint64_t(c.ch));
     fnv_add(h, std::uint64_t(c.width));
-    fnv_add(h, std::uint64_t(c.style.fg));
-    fnv_add(h, std::uint64_t(c.style.bg));
+    fnv_add(h, std::uint64_t(c.style.fg_rgb));
+    fnv_add(h, std::uint64_t(c.style.bg_rgb));
     fnv_add(h, std::uint64_t(c.style.attrs));
 
     return h;
