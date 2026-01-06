@@ -449,8 +449,8 @@ int main() {
 
     auto layout = view::VStack(
         {
-            view::StackChild{.view = &score_view, .main = kStatusHeight},
-            view::StackChild{.view = &game_panel, .weight = 1},
+            view::fixed(&score_view, kStatusHeight),
+            view::flex(&game_panel),
         },
         0);
 

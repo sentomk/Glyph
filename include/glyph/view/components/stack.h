@@ -30,6 +30,17 @@ namespace glyph::view {
   };
 
   // ------------------------------------------------------------
+  // StackChild helpers
+  // ------------------------------------------------------------
+  inline StackChild fixed(const View *view, core::coord_t main) {
+    return StackChild{.view = view, .main = main, .weight = 0};
+  }
+
+  inline StackChild flex(const View *view, core::coord_t weight = 1) {
+    return StackChild{.view = view, .main = -1, .weight = weight};
+  }
+
+  // ------------------------------------------------------------
   // Stack
   // ------------------------------------------------------------
   class Stack : public View {
