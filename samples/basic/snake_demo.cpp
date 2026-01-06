@@ -9,15 +9,16 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "glyph/core/cell.h"
 #include "glyph/core/event.h"
 #include "glyph/core/geometry.h"
 #include "glyph/core/style.h"
 #include "glyph/input/win32/win_input.h"
-#include "glyph/render/ansi/ansi_renderer.h"
 #include "glyph/render/terminal.h"
 #include "glyph/view/frame.h"
+#include "glyph/view/text.h"
 
 namespace {
 
@@ -29,12 +30,15 @@ namespace {
   };
 
   struct GameState {
-    std::deque<glyph::core::Point> snake{};
-    glyph::core::Point             food{};
-    Dir                            dir    = Dir::Right;
-    bool                           alive  = true;
-    bool                           paused = false;
-    int                            score  = 0;
+    std::deque<glyph::core::Point>  snake{};
+    glyph::core::Point              food{};
+    std::vector<glyph::core::Point> obstacles{};
+    Dir                             dir     = Dir::Right;
+    bool                            alive   = true;
+    bool                            paused  = false;
+    int                             score   = 0;
+    int                             apples  = 0;
+    int                             tick_ms = 120;
   };
 
   struct Grid {
@@ -70,10 +74,23 @@ namespace {
     return std::find(snake.begin(), snake.end(), p) != snake.end();
   }
 
+  bool
+  contains(const std::vector<glyph::core::Point> &items, glyph::core::Point p) {
+    return std::find(items.begin(), items.end(), p) != items.end();
+  }
+
+  bool is_blocked(
+      const std::deque<glyph::core::Point>  &snake,
+      const std::vector<glyph::core::Point> &obstacles,
+      glyph::core::Point                     p) {
+    return contains(snake, p) || contains(obstacles, p);
+  }
+
   glyph::core::Point random_empty_cell(
-      std::mt19937                         &rng,
-      const Grid                           &grid,
-      const std::deque<glyph::core::Point> &snake) {
+      std::mt19937                          &rng,
+      const Grid                            &grid,
+      const std::deque<glyph::core::Point>  &snake,
+      const std::vector<glyph::core::Point> &obstacles) {
     std::uniform_int_distribution<int> dist_x(0, grid.w - 1);
     std::uniform_int_distribution<int> dist_y(0, grid.h - 1);
 
@@ -81,7 +98,7 @@ namespace {
       glyph::core::Point p{
           static_cast<glyph::core::coord_t>(dist_x(rng)),
           static_cast<glyph::core::coord_t>(dist_y(rng))};
-      if (!contains(snake, p)) {
+      if (!is_blocked(snake, obstacles, p)) {
         return p;
       }
     }
@@ -89,7 +106,7 @@ namespace {
     for (glyph::core::coord_t y = 0; y < grid.h; ++y) {
       for (glyph::core::coord_t x = 0; x < grid.w; ++x) {
         glyph::core::Point p{x, y};
-        if (!contains(snake, p)) {
+        if (!is_blocked(snake, obstacles, p)) {
           return p;
         }
       }
@@ -98,12 +115,42 @@ namespace {
     return {0, 0};
   }
 
+  std::vector<glyph::core::Point> make_obstacles(
+      std::mt19937                         &rng,
+      const Grid                           &grid,
+      const std::deque<glyph::core::Point> &snake,
+      glyph::core::coord_t                  count) {
+    std::vector<glyph::core::Point> out;
+    out.reserve(static_cast<std::size_t>(count));
+
+    for (glyph::core::coord_t i = 0; i < count; ++i) {
+      const auto p = random_empty_cell(rng, grid, snake, out);
+      if (contains(out, p) || contains(snake, p)) {
+        break;
+      }
+      out.push_back(p);
+    }
+
+    return out;
+  }
+
+  int next_tick_ms(int base_ms, int apples) {
+    const int speedup_every = 5;
+    const int step_ms       = 8;
+    const int min_ms        = 24;
+    const int boosts        = apples / speedup_every;
+    const int adjusted      = base_ms - boosts * step_ms;
+    return std::max(min_ms, adjusted);
+  }
+
   void reset_game(GameState &state, const Grid &grid, std::mt19937 &rng) {
     state.snake.clear();
-    state.score  = 0;
-    state.dir    = Dir::Right;
-    state.alive  = true;
-    state.paused = false;
+    state.score   = 0;
+    state.apples  = 0;
+    state.dir     = Dir::Right;
+    state.alive   = true;
+    state.paused  = false;
+    state.tick_ms = 90;
 
     const auto cx = grid.w / 2;
     const auto cy = grid.h / 2;
@@ -111,24 +158,11 @@ namespace {
     state.snake.push_back({glyph::core::coord_t(cx - 1), cy});
     state.snake.push_back({glyph::core::coord_t(cx - 2), cy});
 
-    state.food = random_empty_cell(rng, grid, state.snake);
-  }
-
-  void draw_text(
-      glyph::view::Frame      &frame,
-      glyph::core::Point       p,
-      const std::string       &text,
-      const glyph::core::Cell &cell) {
-    auto x = p.x;
-    for (char ch : text) {
-      if (x >= frame.size().w) {
-        break;
-      }
-      glyph::core::Cell c = cell;
-      c.ch                = static_cast<char32_t>(ch);
-      frame.set({x, p.y}, c);
-      x = glyph::core::coord_t(x + 1);
-    }
+    const auto max_cells = grid.w * grid.h;
+    const auto target_obstacles =
+        std::max<glyph::core::coord_t>(1, max_cells / 80);
+    state.obstacles = make_obstacles(rng, grid, state.snake, target_obstacles);
+    state.food = random_empty_cell(rng, grid, state.snake, state.obstacles);
   }
 
   void draw_border(
@@ -159,9 +193,8 @@ int main() {
   using namespace glyph;
   using namespace std::chrono_literals;
 
-  render::TerminalSession session{std::cout};
-  render::AnsiRenderer    renderer{std::cout};
-  input::WinInput         input{};
+  render::TerminalApp app{std::cout};
+  input::WinInput     input{};
   input.set_mode(input::InputMode::Raw);
 
   std::mt19937 rng(
@@ -176,7 +209,7 @@ int main() {
   auto next_tick = std::chrono::steady_clock::now();
 
   for (;;) {
-    const auto term   = render::get_terminal_size();
+    const auto term   = app.size();
     const auto width  = term.valid ? term.cols : 80;
     const auto height = term.valid ? term.rows : 24;
 
@@ -208,18 +241,25 @@ int main() {
 
     const auto now = std::chrono::steady_clock::now();
     if (initialized && now >= next_tick) {
-      next_tick = now + 60ms;
+      auto tick_ms = state.tick_ms;
+      if (state.dir == Dir::Up || state.dir == Dir::Down) {
+        tick_ms = tick_ms + 6;
+      }
+      next_tick = now + std::chrono::milliseconds(tick_ms);
       if (state.alive && !state.paused) {
         const auto next = step(state.snake.front(), state.dir);
         if (next.x < 0 || next.y < 0 || next.x >= grid.w || next.y >= grid.h ||
-            contains(state.snake, next)) {
+            contains(state.snake, next) || contains(state.obstacles, next)) {
           state.alive = false;
         }
         else {
           state.snake.push_front(next);
           if (next.x == state.food.x && next.y == state.food.y) {
             state.score += 1;
-            state.food = random_empty_cell(rng, grid, state.snake);
+            state.apples += 1;
+            state.tick_ms = next_tick_ms(90, state.apples);
+            state.food =
+                random_empty_cell(rng, grid, state.snake, state.obstacles);
           }
           else {
             state.snake.pop_back();
@@ -307,23 +347,23 @@ int main() {
     frame.fill(core::Cell::from_char(U' '));
 
     if (width < 20 || height < 8) {
-      draw_text(
+      view::draw_text(
           frame,
           {0, 0},
           "Terminal too small for Snake.",
           core::Cell::from_char(U'!'));
-      renderer.render(frame);
+      app.render(frame);
       dirty = false;
       continue;
     }
 
     if (grid.w < 5 || grid.h < 5) {
-      draw_text(
+      view::draw_text(
           frame,
           {0, 0},
           "Terminal too small for Snake.",
           core::Cell::from_char(U'!'));
-      renderer.render(frame);
+      app.render(frame);
       dirty       = false;
       initialized = false;
       continue;
@@ -335,17 +375,21 @@ int main() {
         core::Style::with_fg(core::Style::rgb(255, 220, 80));
     const core::Style food_style =
         core::Style::with_fg(core::Style::rgb(255, 100, 100));
+    const core::Style obstacle_style =
+        core::Style::with_fg(core::Style::rgb(160, 160, 160));
     const core::Cell border_cell = core::Cell::from_char(U'#');
     const core::Cell head_cell   = core::Cell::from_char(U'O', head_style);
     const core::Cell body_cell   = core::Cell::from_char(U'o', snake_style);
     const core::Cell food_cell   = core::Cell::from_char(U'*', food_style);
+    const core::Cell obstacle_cell =
+        core::Cell::from_char(U'X', obstacle_style);
 
     std::string status = "Score: " + std::to_string(state.score) +
                          "  [Arrows/WASD]  P:Pause  R:Reset  Q/Esc:Quit";
     if (!state.alive) {
       status += "  GAME OVER";
     }
-    draw_text(frame, {0, 0}, status, core::Cell::from_char(U' '));
+    view::draw_text(frame, {0, 0}, status, core::Cell::from_char(U' '));
 
     const auto board =
         core::Rect{core::Point{0, 1}, core::Size{width, height - 1}};
@@ -359,12 +403,19 @@ int main() {
       frame.set(p, i == 0 ? head_cell : body_cell);
     }
 
+    for (const auto &obs : state.obstacles) {
+      const auto p = core::Point{
+          core::coord_t(grid.origin.x + obs.x),
+          core::coord_t(grid.origin.y + obs.y)};
+      frame.set(p, obstacle_cell);
+    }
+
     const auto food_p = core::Point{
         core::coord_t(grid.origin.x + state.food.x),
         core::coord_t(grid.origin.y + state.food.y)};
     frame.set(food_p, food_cell);
 
-    renderer.render(frame);
+    app.render(frame);
     dirty = false;
   }
 

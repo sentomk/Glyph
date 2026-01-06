@@ -63,6 +63,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   # view/
   include/glyph/view/canvas.h
   include/glyph/view/frame.h
+  include/glyph/view/text.h
   include/glyph/view/view.h
   # view/components
   include/glyph/view/components/border.h
