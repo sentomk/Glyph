@@ -94,6 +94,11 @@ namespace glyph::view {
       return Canvas{buf_.view().subview(area)};
     }
 
+    // Sub-frame view with local coordinates (alias for Canvas).
+    [[nodiscard]] Canvas sub_frame(core::Rect area) noexcept {
+      return Canvas{buf_.view().subview(area)};
+    }
+
     std::vector<core::coord_t> take_dirty_lines() const {
       return buf_.take_dirty_lines();
     }

@@ -17,8 +17,12 @@
 #include "glyph/core/style.h"
 #include "glyph/input/win32/win_input.h"
 #include "glyph/render/terminal.h"
+#include "glyph/view/components/panel.h"
+#include "glyph/view/components/stack.h"
 #include "glyph/view/frame.h"
+#include "glyph/view/layout/inset.h"
 #include "glyph/view/text.h"
+#include "glyph/view/view.h"
 
 namespace {
 
@@ -44,8 +48,11 @@ namespace {
   struct Grid {
     glyph::core::coord_t w = 0;
     glyph::core::coord_t h = 0;
-    glyph::core::Point   origin{};
   };
+
+  constexpr glyph::core::coord_t kStatusHeight = 1;
+  constexpr glyph::view::layout::Insets kGamePadding =
+      glyph::view::layout::Insets::all(1);
 
   glyph::core::Point step(glyph::core::Point p, Dir d) {
     using glyph::core::coord_t;
@@ -165,27 +172,91 @@ namespace {
     state.food = random_empty_cell(rng, grid, state.snake, state.obstacles);
   }
 
-  void draw_border(
-      glyph::view::Frame      &frame,
-      glyph::core::Rect        area,
-      const glyph::core::Cell &cell) {
-    if (area.empty()) {
-      return;
-    }
-    const auto x0 = area.left();
-    const auto y0 = area.top();
-    const auto x1 = area.right() - 1;
-    const auto y1 = area.bottom() - 1;
-
-    for (glyph::core::coord_t x = x0; x <= x1; ++x) {
-      frame.set({x, y0}, cell);
-      frame.set({x, y1}, cell);
-    }
-    for (glyph::core::coord_t y = y0; y <= y1; ++y) {
-      frame.set({x0, y}, cell);
-      frame.set({x1, y}, cell);
-    }
+  Grid grid_from_frame(glyph::core::Size size) {
+    const auto game_h = glyph::core::coord_t(size.h - kStatusHeight);
+    const auto inner_w = glyph::core::coord_t(
+        size.w - (kGamePadding.left + kGamePadding.right));
+    const auto inner_h = glyph::core::coord_t(
+        game_h - (kGamePadding.top + kGamePadding.bottom));
+    return Grid{
+        std::max<glyph::core::coord_t>(0, inner_w),
+        std::max<glyph::core::coord_t>(0, inner_h),
+    };
   }
+
+  class ScoreBoardView final : public glyph::view::View {
+  public:
+    explicit ScoreBoardView(const GameState *state) : state_(state) {
+    }
+
+    void render(glyph::view::Frame &f, glyph::core::Rect area) const override {
+      if (state_ == nullptr || area.empty()) {
+        return;
+      }
+
+      auto canvas = f.sub_frame(area);
+      std::string status = "Score: " + std::to_string(state_->score) +
+                           "  Speed: " + std::to_string(state_->tick_ms) +
+                           "ms  [Arrows/WASD]  P:Pause  R:Reset  Q/Esc:Quit";
+      if (!state_->alive) {
+        status += "  GAME OVER";
+      }
+      glyph::view::draw_text(canvas, {0, 0}, status,
+                             glyph::core::Cell::from_char(U' '));
+    }
+
+  private:
+    const GameState *state_ = nullptr;
+  };
+
+  class SnakeView final : public glyph::view::View {
+  public:
+    explicit SnakeView(const GameState *state) : state_(state) {
+    }
+
+    void render(glyph::view::Frame &f, glyph::core::Rect area) const override {
+      if (state_ == nullptr || area.empty()) {
+        return;
+      }
+
+      auto canvas = f.sub_frame(area);
+      if (canvas.empty()) {
+        return;
+      }
+
+      const auto snake_style =
+          glyph::core::Style::with_fg(glyph::core::Style::rgb(100, 255, 100));
+      const auto head_style =
+          glyph::core::Style::with_fg(glyph::core::Style::rgb(255, 220, 80));
+      const auto food_style =
+          glyph::core::Style::with_fg(glyph::core::Style::rgb(255, 100, 100));
+      const auto obstacle_style =
+          glyph::core::Style::with_fg(glyph::core::Style::rgb(160, 160, 160));
+
+      const auto head_cell =
+          glyph::core::Cell::from_char(U'O', head_style);
+      const auto body_cell =
+          glyph::core::Cell::from_char(U'o', snake_style);
+      const auto food_cell =
+          glyph::core::Cell::from_char(U'*', food_style);
+      const auto obstacle_cell =
+          glyph::core::Cell::from_char(U'X', obstacle_style);
+
+      for (std::size_t i = 0; i < state_->snake.size(); ++i) {
+        const auto &seg = state_->snake[i];
+        canvas.set({seg.x, seg.y}, i == 0 ? head_cell : body_cell);
+      }
+
+      for (const auto &obs : state_->obstacles) {
+        canvas.set({obs.x, obs.y}, obstacle_cell);
+      }
+
+      canvas.set({state_->food.x, state_->food.y}, food_cell);
+    }
+
+  private:
+    const GameState *state_ = nullptr;
+  };
 
 } // namespace
 
@@ -228,10 +299,7 @@ int main() {
       initialized = false;
     }
 
-    const Grid grid{
-        glyph::core::coord_t(width - 2),
-        glyph::core::coord_t(height - 3),
-        {1, 2}};
+    const Grid grid = grid_from_frame(core::Size{width, height});
 
     if (!initialized && grid.w >= 5 && grid.h >= 5) {
       reset_game(state, grid, rng);
@@ -369,51 +437,24 @@ int main() {
       continue;
     }
 
-    const core::Style snake_style =
-        core::Style::with_fg(core::Style::rgb(100, 255, 100));
-    const core::Style head_style =
-        core::Style::with_fg(core::Style::rgb(255, 220, 80));
-    const core::Style food_style =
-        core::Style::with_fg(core::Style::rgb(255, 100, 100));
-    const core::Style obstacle_style =
-        core::Style::with_fg(core::Style::rgb(160, 160, 160));
-    const core::Cell border_cell = core::Cell::from_char(U'#');
-    const core::Cell head_cell   = core::Cell::from_char(U'O', head_style);
-    const core::Cell body_cell   = core::Cell::from_char(U'o', snake_style);
-    const core::Cell food_cell   = core::Cell::from_char(U'*', food_style);
-    const core::Cell obstacle_cell =
-        core::Cell::from_char(U'X', obstacle_style);
+    ScoreBoardView score_view(&state);
+    SnakeView      snake_view(&state);
 
-    std::string status = "Score: " + std::to_string(state.score) +
-                         "  [Arrows/WASD]  P:Pause  R:Reset  Q/Esc:Quit";
-    if (!state.alive) {
-      status += "  GAME OVER";
-    }
-    view::draw_text(frame, {0, 0}, status, core::Cell::from_char(U' '));
+    view::PanelView game_panel(&snake_view);
+    game_panel.set_fill(core::Cell::from_char(U' '));
+    game_panel.set_border(core::Cell::from_char(U'#'));
+    game_panel.set_padding(kGamePadding);
+    game_panel.set_draw_fill(true);
+    game_panel.set_draw_border(true);
 
-    const auto board =
-        core::Rect{core::Point{0, 1}, core::Size{width, height - 1}};
-    draw_border(frame, board, border_cell);
+    auto layout = view::VStack(
+        {
+            view::StackChild{.view = &score_view, .main = kStatusHeight},
+            view::StackChild{.view = &game_panel, .weight = 1},
+        },
+        0);
 
-    for (std::size_t i = 0; i < state.snake.size(); ++i) {
-      const auto &seg = state.snake[i];
-      const auto  p   = core::Point{
-          core::coord_t(grid.origin.x + seg.x),
-          core::coord_t(grid.origin.y + seg.y)};
-      frame.set(p, i == 0 ? head_cell : body_cell);
-    }
-
-    for (const auto &obs : state.obstacles) {
-      const auto p = core::Point{
-          core::coord_t(grid.origin.x + obs.x),
-          core::coord_t(grid.origin.y + obs.y)};
-      frame.set(p, obstacle_cell);
-    }
-
-    const auto food_p = core::Point{
-        core::coord_t(grid.origin.x + state.food.x),
-        core::coord_t(grid.origin.y + state.food.y)};
-    frame.set(food_p, food_cell);
+    layout.render(frame, frame.bounds());
 
     app.render(frame);
     dirty = false;
