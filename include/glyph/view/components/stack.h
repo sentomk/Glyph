@@ -89,6 +89,37 @@ namespace glyph::view {
   };
 
   // ------------------------------------------------------------
+  // ZStack
+  // ------------------------------------------------------------
+  // Overlay children in order within the same rect.
+  class ZStack : public View {
+  public:
+    explicit ZStack(std::initializer_list<const View *> children)
+        : children_(children) {
+    }
+
+    explicit ZStack(std::vector<const View *> children)
+        : children_(std::move(children)) {
+    }
+
+    void render(Frame &f, core::Rect area) const override {
+      if (area.empty() || children_.empty()) {
+        return;
+      }
+
+      for (const auto *view : children_) {
+        if (view == nullptr) {
+          continue;
+        }
+        view->render(f, area);
+      }
+    }
+
+  private:
+    std::vector<const View *> children_{};
+  };
+
+  // ------------------------------------------------------------
   // HStack / VStack helpers
   // ------------------------------------------------------------
   inline Stack HStack(std::initializer_list<StackChild> children,
@@ -99,6 +130,13 @@ namespace glyph::view {
   inline Stack VStack(std::initializer_list<StackChild> children,
                       core::coord_t                    spacing = 0) {
     return Stack(layout::Axis::Vertical, children, spacing);
+  }
+
+  // ------------------------------------------------------------
+  // ZStack helper
+  // ------------------------------------------------------------
+  inline ZStack ZStackView(std::initializer_list<const View *> children) {
+    return ZStack(children);
   }
 
 } // namespace glyph::view
