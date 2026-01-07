@@ -83,6 +83,13 @@ namespace glyph::view {
       return panel;
     }
 
+    static PanelView header(const View *child, core::Color border_color,
+                            char32_t border_char = U'=',
+                            layout::Insets padding =
+                                layout::Insets::hv(2, 1)) {
+      return card(child, border_color, border_char, padding);
+    }
+
     // Construct a panel with an optional child.
     explicit PanelView(const View *child = nullptr) : child_(child) {
     }

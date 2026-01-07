@@ -68,12 +68,13 @@ namespace {
         return;
       }
 
-      auto label = view::LabelView(text_)
-                       .set_align(view::layout::AlignH::Center,
-                                  view::layout::AlignV::Center)
-                       .set_cell(label_cell(0x88C0D0, true));
-      auto panel = view::PanelView::card(&label, 0x88C0D0, U'*',
-                                         view::layout::Insets::hv(2, 1));
+      auto label =
+          view::LabelView(text_)
+              .set_align(
+                  view::layout::AlignH::Center, view::layout::AlignV::Center)
+              .set_cell(label_cell(0x88C0D0, true));
+      auto panel = view::PanelView::card(
+          &label, 0x88C0D0, U'*', view::layout::Insets::hv(2, 1));
 
       const auto toast_w = std::min<core::coord_t>(28, area.width());
       const auto toast_h = core::coord_t(3);
@@ -96,41 +97,43 @@ namespace {
     BackgroundView bg(phase);
     const auto     card_base = view::PanelStyle::card(nord_blue);
 
-    auto title = view::LabelView(U"Glyph - Aurora")
-                     .set_align(view::layout::AlignH::Center,
-                                view::layout::AlignV::Center)
-                     .set_cell(label_cell(nord_blue, true));
-    auto header =
-        view::PanelView::card(&title, nord_blue, U'=',
-                              view::layout::Insets::hv(2, 1));
+    auto title =
+        view::LabelView(U"Glyph - Aurora")
+            .set_align(
+                view::layout::AlignH::Center, view::layout::AlignV::Center)
+            .set_cell(label_cell(nord_blue, true));
 
-    auto hero = view::LabelView(U"NOW PLAYING\n"
-                                U"Neon Drift - 3:42\n"
-                                U"Ambient / 124 bpm\n\n"
-                                U"Queue: 12 tracks")
-                    .set_align(view::layout::AlignH::Left,
-                               view::layout::AlignV::Top)
-                    .set_cell(label_cell(active_color));
-    auto hero_panel =
-        view::PanelView::card(&hero, focus == 0 ? active_color : nord_blue,
-                              U'#');
+    auto header = view::PanelView::header(&title, nord_blue);
 
-    auto stats = view::LabelView(U"ACTIVE\n"
-                                 U"- 24 nodes\n"
-                                 U"- 3.2ms\n"
-                                 U"- 99.99%")
-                     .set_align(view::layout::AlignH::Left,
-                                view::layout::AlignV::Top)
-                     .set_cell(label_cell(0xA3BE8C));
+    auto hero =
+        view::LabelView(
+            U"NOW PLAYING\n"
+            U"Neon Drift - 3:42\n"
+            U"Ambient / 124 bpm\n\n"
+            U"Queue: 12 tracks")
+            .set_align(view::layout::AlignH::Left, view::layout::AlignV::Top)
+            .set_cell(label_cell(active_color));
+    auto hero_panel = view::PanelView::card(
+        &hero, focus == 0 ? active_color : nord_blue, U'#');
+
+    auto stats =
+        view::LabelView(
+            U"ACTIVE\n"
+            U"- 24 nodes\n"
+            U"- 3.2ms\n"
+            U"- 99.99%")
+            .set_align(view::layout::AlignH::Left, view::layout::AlignV::Top)
+            .set_cell(label_cell(0xA3BE8C));
     auto stats_panel = view::PanelView::card(
         &stats, focus == 1 ? active_color : core::Color{0xA3BE8C});
 
-    auto alerts = view::LabelView(U"ALERTS\n"
-                                  U"- None\n"
-                                  U"- Systems nominal")
-                      .set_align(view::layout::AlignH::Left,
-                                 view::layout::AlignV::Top)
-                      .set_cell(label_cell(0xD08770));
+    auto alerts =
+        view::LabelView(
+            U"ALERTS\n"
+            U"- None\n"
+            U"- Systems nominal")
+            .set_align(view::layout::AlignH::Left, view::layout::AlignV::Top)
+            .set_cell(label_cell(0xD08770));
     auto alerts_panel = view::PanelView::card(
         &alerts, focus == 2 ? active_color : core::Color{0xD08770});
 
@@ -149,9 +152,10 @@ namespace {
         2);
 
     auto footer =
-        view::LabelView(U"Press Q to exit - Tab to cycle focus - Built with Glyph")
-            .set_align(view::layout::AlignH::Center,
-                       view::layout::AlignV::Center)
+        view::LabelView(
+            U"Press Q to exit - Tab to cycle focus - Built with Glyph")
+            .set_align(
+                view::layout::AlignH::Center, view::layout::AlignV::Center)
             .set_cell(label_cell(active_color));
 
     auto layout = view::VStack(
