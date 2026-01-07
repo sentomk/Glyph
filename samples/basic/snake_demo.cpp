@@ -438,8 +438,8 @@ int main() {
 
     auto layout = view::VStack(
         {
-            view::fixed(&score_view, kStatusHeight),
-            view::flex(&game_panel),
+            view::Fixed(&score_view, kStatusHeight),
+            view::Flex(&game_panel),
         },
         0);
 

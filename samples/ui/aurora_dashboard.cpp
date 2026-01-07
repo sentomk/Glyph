@@ -23,6 +23,14 @@ namespace {
 
   using namespace glyph;
 
+  core::Cell label_cell(core::Color color, bool bold = false) {
+    auto style = core::Style{}.fg(color);
+    if (bold) {
+      style = style.bold();
+    }
+    return core::Cell(U' ', style);
+  }
+
   class BackgroundView final : public view::View {
   public:
     explicit BackgroundView(core::coord_t phase) : phase_(phase) {
@@ -60,17 +68,12 @@ namespace {
         return;
       }
 
-      view::LabelView label(text_);
-      label.set_align(
-          view::layout::AlignH::Center, view::layout::AlignV::Center);
-      label.set_cell(core::Cell(U' ', core::Style{}.fg(0x88C0D0).bold()));
-
-      view::PanelView panel(&label);
-      panel.set_fill(core::Cell(U' '));
-      panel.set_border(core::Cell(U'*', core::Style{}.fg(0x88C0D0)));
-      panel.set_padding(view::layout::Insets::hv(2, 1));
-      panel.set_draw_fill(true);
-      panel.set_draw_border(true);
+      auto label = view::LabelView(text_)
+                       .set_align(view::layout::AlignH::Center,
+                                  view::layout::AlignV::Center)
+                       .set_cell(label_cell(0x88C0D0, true));
+      auto panel = view::PanelView::card(&label, 0x88C0D0, U'*',
+                                         view::layout::Insets::hv(2, 1));
 
       const auto toast_w = std::min<core::coord_t>(28, area.width());
       const auto toast_h = core::coord_t(3);
@@ -87,91 +90,75 @@ namespace {
   void render_ui(view::Frame &frame, core::coord_t phase, int focus) {
     using namespace glyph;
 
+    const auto active_color = 0xE5E9F0;
+    const auto nord_blue    = 0x88C0D0;
+
     BackgroundView bg(phase);
+    const auto     card_base = view::PanelStyle::card(nord_blue);
 
-    view::LabelView title(U"Glyph - Aurora");
-    title.set_align(view::layout::AlignH::Center, view::layout::AlignV::Center);
-    title.set_cell(core::Cell(U' ', core::Style{}.fg(0x88C0D0).bold()));
+    auto title = view::LabelView(U"Glyph - Aurora")
+                     .set_align(view::layout::AlignH::Center,
+                                view::layout::AlignV::Center)
+                     .set_cell(label_cell(nord_blue, true));
+    auto header =
+        view::PanelView::card(&title, nord_blue, U'=',
+                              view::layout::Insets::hv(2, 1));
 
-    view::PanelView header(&title);
-    header.set_fill(core::Cell(U' '));
-    header.set_border(core::Cell(U'=', core::Style{}.fg(0x88C0D0)));
-    header.set_padding(view::layout::Insets::hv(2, 1));
-    header.set_draw_fill(true);
-    header.set_draw_border(true);
+    auto hero = view::LabelView(U"NOW PLAYING\n"
+                                U"Neon Drift - 3:42\n"
+                                U"Ambient / 124 bpm\n\n"
+                                U"Queue: 12 tracks")
+                    .set_align(view::layout::AlignH::Left,
+                               view::layout::AlignV::Top)
+                    .set_cell(label_cell(active_color));
+    auto hero_panel =
+        view::PanelView::card(&hero, focus == 0 ? active_color : nord_blue,
+                              U'#');
 
-    view::LabelView hero(
-        U"NOW PLAYING\n"
-        U"Neon Drift - 3:42\n"
-        U"Ambient / 124 bpm\n\n"
-        U"Queue: 12 tracks");
-    hero.set_align(view::layout::AlignH::Left, view::layout::AlignV::Top);
-    hero.set_cell(core::Cell(U' ', core::Style{}.fg(0xE5E9F0)));
+    auto stats = view::LabelView(U"ACTIVE\n"
+                                 U"- 24 nodes\n"
+                                 U"- 3.2ms\n"
+                                 U"- 99.99%")
+                     .set_align(view::layout::AlignH::Left,
+                                view::layout::AlignV::Top)
+                     .set_cell(label_cell(0xA3BE8C));
+    auto stats_panel = view::PanelView::card(
+        &stats, focus == 1 ? active_color : core::Color{0xA3BE8C});
 
-    view::PanelView hero_panel(&hero);
-    hero_panel.set_fill(core::Cell(U' '));
-    hero_panel.set_border(
-        core::Cell(U'#', core::Style{}.fg(focus == 0 ? 0xE5E9F0 : 0x88C0D0)));
-    hero_panel.set_padding(view::layout::Insets::all(1));
-    hero_panel.set_draw_fill(true);
-    hero_panel.set_draw_border(true);
-
-    view::LabelView stats(
-        U"ACTIVE\n"
-        U"- 24 nodes\n"
-        U"- 3.2ms\n"
-        U"- 99.99%");
-    stats.set_align(view::layout::AlignH::Left, view::layout::AlignV::Top);
-    stats.set_cell(core::Cell(U' ', core::Style{}.fg(0xA3BE8C)));
-
-    view::PanelView stats_panel(&stats);
-    stats_panel.set_fill(core::Cell(U' '));
-    stats_panel.set_border(
-        core::Cell(U'+', core::Style{}.fg(focus == 1 ? 0xE5E9F0 : 0xA3BE8C)));
-    stats_panel.set_padding(view::layout::Insets::all(1));
-    stats_panel.set_draw_fill(true);
-    stats_panel.set_draw_border(true);
-
-    view::LabelView alerts(
-        U"ALERTS\n"
-        U"- None\n"
-        U"- Systems nominal");
-    alerts.set_align(view::layout::AlignH::Left, view::layout::AlignV::Top);
-    alerts.set_cell(core::Cell(U' ', core::Style{}.fg(0xD08770)));
-
-    view::PanelView alerts_panel(&alerts);
-    alerts_panel.set_fill(core::Cell(U' '));
-    alerts_panel.set_border(
-        core::Cell(U'+', core::Style{}.fg(focus == 2 ? 0xE5E9F0 : 0xD08770)));
-    alerts_panel.set_padding(view::layout::Insets::all(1));
-    alerts_panel.set_draw_fill(true);
-    alerts_panel.set_draw_border(true);
+    auto alerts = view::LabelView(U"ALERTS\n"
+                                  U"- None\n"
+                                  U"- Systems nominal")
+                      .set_align(view::layout::AlignH::Left,
+                                 view::layout::AlignV::Top)
+                      .set_cell(label_cell(0xD08770));
+    auto alerts_panel = view::PanelView::card(
+        &alerts, focus == 2 ? active_color : core::Color{0xD08770});
 
     auto right_stack = view::VStack(
         {
-            view::fixed(&stats_panel, 6),
-            view::fixed(&alerts_panel, 5),
+            view::Fixed(stats_panel, 6),
+            view::Fixed(alerts_panel, 5),
         },
         1);
 
     auto body = view::HStack(
         {
-            view::flex(&hero_panel, 2),
-            view::flex(&right_stack, 1),
+            view::Flex(hero_panel, 2),
+            view::Flex(right_stack, 1),
         },
         2);
 
-    view::LabelView footer(
-        U"Press Q to exit - Tab to cycle focus - Built with Glyph");
-    footer.set_align(
-        view::layout::AlignH::Center, view::layout::AlignV::Center);
-    footer.set_cell(core::Cell(U' ', core::Style{}.fg(0xE5E9F0)));
+    auto footer =
+        view::LabelView(U"Press Q to exit - Tab to cycle focus - Built with Glyph")
+            .set_align(view::layout::AlignH::Center,
+                       view::layout::AlignV::Center)
+            .set_cell(label_cell(active_color));
 
     auto layout = view::VStack(
         {
-            view::fixed(&header, 4),
-            view::flex(&body, 1),
-            view::fixed(&footer, 2),
+            view::Fixed(header, 4),
+            view::Flex(body, 1),
+            view::Fixed(footer, 2),
         },
         1);
 

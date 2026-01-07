@@ -32,12 +32,20 @@ namespace glyph::view {
   // ------------------------------------------------------------
   // StackChild helpers
   // ------------------------------------------------------------
-  inline StackChild fixed(const View *view, core::coord_t main) {
+  inline StackChild Fixed(const View *view, core::coord_t main) {
     return StackChild{.view = view, .main = main, .weight = 0};
   }
 
-  inline StackChild flex(const View *view, core::coord_t weight = 1) {
+  inline StackChild Fixed(const View &view, core::coord_t main) {
+    return Fixed(&view, main);
+  }
+
+  inline StackChild Flex(const View *view, core::coord_t weight = 1) {
     return StackChild{.view = view, .main = -1, .weight = weight};
+  }
+
+  inline StackChild Flex(const View &view, core::coord_t weight = 1) {
+    return Flex(&view, weight);
   }
 
   // ------------------------------------------------------------
@@ -130,6 +138,26 @@ namespace glyph::view {
   inline Stack VStack(std::initializer_list<StackChild> children,
                       core::coord_t                    spacing = 0) {
     return Stack(layout::Axis::Vertical, children, spacing);
+  }
+
+  inline Stack HStack(std::initializer_list<const View *> children,
+                      core::coord_t                      spacing = 0) {
+    std::vector<StackChild> items;
+    items.reserve(children.size());
+    for (const auto *view : children) {
+      items.push_back(Flex(view));
+    }
+    return Stack(layout::Axis::Horizontal, std::move(items), spacing);
+  }
+
+  inline Stack VStack(std::initializer_list<const View *> children,
+                      core::coord_t                      spacing = 0) {
+    std::vector<StackChild> items;
+    items.reserve(children.size());
+    for (const auto *view : children) {
+      items.push_back(Flex(view));
+    }
+    return Stack(layout::Axis::Vertical, std::move(items), spacing);
   }
 
   // ------------------------------------------------------------
