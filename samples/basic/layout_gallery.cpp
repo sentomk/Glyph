@@ -14,7 +14,6 @@
 #include "glyph/view/layout/box.h"
 #include "glyph/view/layout/inset.h"
 #include "glyph/view/layout/split.h"
-#include "glyph/view/layout/stack.h"
 
 namespace {
 
@@ -94,13 +93,13 @@ namespace {
         spec.size = core::Size{10, 3};
         fill_rect(frame, view::layout::align_rect(columns.rects[0], spec), U'X');
 
-        // Right: stack demo with inset borders.
+        // Right: layered inset borders.
         fill_rect(frame, columns.rects[1], U'R');
-        auto layers = view::layout::layout_stack(columns.rects[1], 3);
-        for (std::size_t i = 0; i < layers.rects.size(); ++i) {
+        const auto base = columns.rects[1];
+        for (std::size_t i = 0; i < 3; ++i) {
           const auto inset = view::layout::inset_rect(
-              layers.rects[i], view::layout::Insets::all(
-                                   static_cast<core::coord_t>(i)));
+              base, view::layout::Insets::all(
+                        static_cast<core::coord_t>(i)));
           const char32_t ch = static_cast<char32_t>(U'1' + i);
           draw_border(frame, inset, ch);
         }

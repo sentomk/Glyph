@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "glyph/view/components/panel.h"
 #include "glyph/view/frame.h"
 #include "glyph/view/view.h"
 
@@ -20,18 +21,16 @@ namespace glyph::view {
 
   public:
     // Construct with a fill cell.
-    explicit FillView(core::Cell c) : cell_(c) {
+    explicit FillView(core::Cell c) {
+      panel_.set_fill(c);
     }
 
     // Fill the given area.
     void render(Frame &f, core::Rect area) const override {
-      if (area.empty()) {
-        return;
-      }
-      f.fill_rect(area, cell_);
+      panel_.render(f, area);
     }
 
   private:
-    core::Cell cell_{};
+    PanelView panel_{};
   };
 } // namespace glyph::view

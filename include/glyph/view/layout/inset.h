@@ -54,18 +54,4 @@ namespace glyph::view::layout {
     return core::Rect{core::Point{x0, y0}, core::Size{w, h}};
   }
 
-  // ------------------------------------------------------------
-  // Single-child layout from inset rect
-  // ------------------------------------------------------------
-  // Single-child layout convenience wrapper for inset_rect().
-  inline LayoutResult layout_inset(core::Rect area, Insets in) {
-    LayoutResult out{};
-    if (area.empty()) {
-      return out;
-    }
-
-    out.rects.push_back(inset_rect(area, in));
-    return out;
-  }
-
 } // namespace glyph::view::layout
