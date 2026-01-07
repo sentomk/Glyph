@@ -96,4 +96,8 @@ namespace glyph::render {
     renderer_.render(frame);
   }
 
+  void TerminalApp::reset_renderer() {
+    renderer_.reset();
+  }
+
 } // namespace glyph::render

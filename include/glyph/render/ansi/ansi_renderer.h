@@ -19,6 +19,7 @@ namespace glyph::render {
     explicit AnsiRenderer(std::ostream &out) noexcept;
 
     void render(const view::Frame &frame) override;
+    void reset() noexcept;
 
   private:
     std::ostream       &out_;

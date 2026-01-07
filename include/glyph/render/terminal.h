@@ -79,6 +79,7 @@ namespace glyph::render {
     core::Size   frame_size(core::Size fallback = {80, 24}) const;
 
     void render(const view::Frame &frame);
+    void reset_renderer();
 
   private:
     TerminalSession session_;

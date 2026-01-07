@@ -19,6 +19,11 @@ namespace glyph::render {
   AnsiRenderer::AnsiRenderer(std::ostream &out) noexcept : out_(out) {
   }
 
+  void AnsiRenderer::reset() noexcept {
+    prev_.resize(core::Size{0, 0});
+    has_prev_ = false;
+  }
+
   // Clear the entire screen.
   static void ansi_clear(std::ostream &out) {
     out << "\x1b[2J";
