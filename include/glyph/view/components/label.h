@@ -48,34 +48,40 @@ namespace glyph::view {
     }
 
     // Update label contents.
-    void set_text(std::u32string text) {
+    LabelView &set_text(std::u32string text) {
       text_ = std::move(text);
+      return *this;
     }
 
     // Update the base Cell used for each glyph.
-    void set_cell(core::Cell cell) {
+    LabelView &set_cell(core::Cell cell) {
       cell_ = cell;
+      return *this;
     }
 
     // Configure horizontal/vertical alignment inside the area.
-    void set_align(layout::AlignH h, layout::AlignV v) {
+    LabelView &set_align(layout::AlignH h, layout::AlignV v) {
       align_h_ = h;
       align_v_ = v;
+      return *this;
     }
 
     // Enable simple auto-wrap by available width.
-    void set_wrap(bool enabled) {
+    LabelView &set_wrap(bool enabled) {
       wrap_mode_ = enabled ? WrapMode::Char : WrapMode::None;
+      return *this;
     }
 
     // Select wrap strategy for multi-line rendering.
-    void set_wrap_mode(WrapMode mode) {
+    LabelView &set_wrap_mode(WrapMode mode) {
       wrap_mode_ = mode;
+      return *this;
     }
 
     // Enable ellipsis for single-line overflow.
-    void set_ellipsis(bool enabled) {
+    LabelView &set_ellipsis(bool enabled) {
       ellipsis_ = enabled;
+      return *this;
     }
 
     // Render text into the given area with alignment and clipping.

@@ -19,11 +19,70 @@
 namespace glyph::view {
 
   // ------------------------------------------------------------
+  // PanelStyle
+  // ------------------------------------------------------------
+  struct PanelStyle final {
+    core::Cell     fill_cell{core::Cell::from_char(U' ')};
+    core::Cell     border_cell{core::Cell::from_char(U'#')};
+    layout::Insets padding{};
+    bool           draw_fill   = false;
+    bool           draw_border = false;
+
+    static PanelStyle card(core::Color border_color,
+                           char32_t   border_char = U'+',
+                           layout::Insets padding = layout::Insets::all(1)) {
+      PanelStyle style{};
+      style.fill_cell = core::Cell::from_char(U' ');
+      style.border_cell =
+          core::Cell(border_char, core::Style{}.fg(border_color));
+      style.padding     = padding;
+      style.draw_fill   = true;
+      style.draw_border = true;
+      return style;
+    }
+
+    PanelStyle with_border(core::Color border_color,
+                           char32_t   border_char) const {
+      PanelStyle style = *this;
+      style.border_cell =
+          core::Cell(border_char, core::Style{}.fg(border_color));
+      style.draw_border = true;
+      return style;
+    }
+
+    PanelStyle with_border_color(core::Color border_color) const {
+      return with_border(border_color, border_cell.ch);
+    }
+
+    PanelStyle with_padding(layout::Insets insets) const {
+      PanelStyle style = *this;
+      style.padding    = insets;
+      return style;
+    }
+
+    PanelStyle with_fill(core::Cell cell) const {
+      PanelStyle style = *this;
+      style.fill_cell  = cell;
+      style.draw_fill  = true;
+      return style;
+    }
+  };
+
+  // ------------------------------------------------------------
   // PanelView
   // ------------------------------------------------------------
   class PanelView : public View {
 
   public:
+    static PanelView card(const View *child, core::Color border_color,
+                          char32_t border_char = U'+',
+                          layout::Insets padding =
+                              layout::Insets::all(1)) {
+      PanelView panel(child);
+      panel.set_style(PanelStyle::card(border_color, border_char, padding));
+      return panel;
+    }
+
     // Construct a panel with an optional child.
     explicit PanelView(const View *child = nullptr) : child_(child) {
     }
@@ -48,6 +107,15 @@ namespace glyph::view {
     // Set padding (inset) applied to the child area.
     void set_padding(layout::Insets insets) {
       padding_ = insets;
+    }
+
+    // Apply a reusable style preset.
+    void set_style(const PanelStyle &style) {
+      fill_cell_   = style.fill_cell;
+      border_cell_ = style.border_cell;
+      padding_     = style.padding;
+      draw_fill_   = style.draw_fill;
+      draw_border_ = style.draw_border;
     }
 
     // Toggle fill rendering without changing the cell value.
