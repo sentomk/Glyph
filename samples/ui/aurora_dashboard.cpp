@@ -208,6 +208,8 @@ int main() {
   int                  focus = 0;
   bool                 skip_sleep = false;
   bool                 should_quit = false;
+  const auto           frame_step = 16ms;
+  auto                 next_frame = std::chrono::steady_clock::now();
 
   for (;;) {
     // Query terminal size and fall back to a sane default.
@@ -275,9 +277,19 @@ int main() {
     last_size = size;
     first     = false;
     // Fixed cadence to keep CPU use reasonable.
-    if (!skip_sleep) {
-      std::this_thread::sleep_for(16ms);
+    const auto now = std::chrono::steady_clock::now();
+    if (skip_sleep) {
+      next_frame = now;
+      continue;
     }
+
+    if (now >= next_frame) {
+      next_frame = now + frame_step;
+      continue;
+    }
+
+    std::this_thread::sleep_until(next_frame);
+    next_frame += frame_step;
   }
 
   return 0;
