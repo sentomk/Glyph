@@ -12,7 +12,6 @@
 #include "glyph/core/diff.h"
 #include "glyph/view/frame.h"
 #include <ostream>
-#include <sstream>
 
 namespace glyph::render {
 
@@ -202,19 +201,24 @@ namespace glyph::render {
       return;
     }
 
-    // Filter dirty lines by content hash to avoid unnecessary diff spans.
+    const auto                        prev_view = prev_.const_view();
     std::vector<glyph::core::coord_t> changed_lines;
-    changed_lines.reserve(dirty_lines.size());
-    const auto prev_view = prev_.const_view();
-    for (auto y : dirty_lines) {
-      if (glyph::core::hash_line(prev_view, y) !=
-          glyph::core::hash_line(cur, y)) {
-        changed_lines.push_back(y);
+    if (dirty_lines.size() < std::size_t(size.h / 4)) {
+      // Filter dirty lines by content hash to avoid unnecessary diff spans.
+      changed_lines.reserve(dirty_lines.size());
+      for (auto y : dirty_lines) {
+        if (glyph::core::hash_line(prev_view, y) !=
+            glyph::core::hash_line(cur, y)) {
+          changed_lines.push_back(y);
+        }
+      }
+
+      if (changed_lines.empty()) {
+        return;
       }
     }
-
-    if (changed_lines.empty()) {
-      return;
+    else {
+      changed_lines.assign(dirty_lines.begin(), dirty_lines.end());
     }
 
     ansi_wrap(out_, false);
@@ -222,8 +226,7 @@ namespace glyph::render {
     glyph::core::Style current{};
     bool               has_current = false;
 
-    const auto spans =
-        glyph::core::diff_spans(prev_view, cur, changed_lines);
+    const auto spans = glyph::core::diff_spans(prev_view, cur, changed_lines);
 
     for (const auto &span : spans) {
       render_span(out_, cur, span, current, has_current);
