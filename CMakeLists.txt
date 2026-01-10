@@ -186,3 +186,11 @@ add_executable(snake_demo
 target_link_libraries(snake_demo
   PRIVATE glyph::glyph
 )
+
+# poll_stress_demo
+add_executable(poll_stress_demo
+  samples/basic/poll_stress_demo.cpp
+)
+target_link_libraries(poll_stress_demo
+  PRIVATE glyph::glyph
+)
