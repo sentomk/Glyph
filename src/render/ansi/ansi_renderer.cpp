@@ -202,13 +202,28 @@ namespace glyph::render {
       return;
     }
 
+    // Filter dirty lines by content hash to avoid unnecessary diff spans.
+    std::vector<glyph::core::coord_t> changed_lines;
+    changed_lines.reserve(dirty_lines.size());
+    const auto prev_view = prev_.const_view();
+    for (auto y : dirty_lines) {
+      if (glyph::core::hash_line(prev_view, y) !=
+          glyph::core::hash_line(cur, y)) {
+        changed_lines.push_back(y);
+      }
+    }
+
+    if (changed_lines.empty()) {
+      return;
+    }
+
     ansi_wrap(out_, false);
 
     glyph::core::Style current{};
     bool               has_current = false;
 
     const auto spans =
-        glyph::core::diff_spans(prev_.const_view(), cur, dirty_lines);
+        glyph::core::diff_spans(prev_view, cur, changed_lines);
 
     for (const auto &span : spans) {
       render_span(out_, cur, span, current, has_current);
