@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16...3.28)
 
 project(glyph
-  VERSION 0.1.2
+  VERSION 0.2.0
   DESCRIPTION "TUI engine for modern C++"
   LANGUAGES CXX 
 )
@@ -68,14 +68,12 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/view.h
   # view/components
   include/glyph/view/components/border.h
+  include/glyph/view/components/bar.h
   include/glyph/view/components/fill.h
   include/glyph/view/components/inset.h
   include/glyph/view/components/label.h
   include/glyph/view/components/panel.h
   include/glyph/view/components/stack.h
-
-
-
   # view/layout
   include/glyph/view/layout/align.h
   include/glyph/view/layout/box.h
@@ -162,6 +160,14 @@ add_executable(components_demo
   samples/basic/components_demo.cpp
 )
 target_link_libraries(components_demo
+  PRIVATE glyph::glyph
+)
+
+# bar_demo
+add_executable(bar_demo
+  samples/basic/bar_demo.cpp
+)
+target_link_libraries(bar_demo
   PRIVATE glyph::glyph
 )
 
