@@ -152,11 +152,10 @@ namespace glyph::render {
     const auto size = frame.size();
     const auto cur  = frame.view();
 
-    // First frame or size change: full redraw into a buffer to avoid scroll.
+    // First frame or size change: full redraw.
     if (!has_prev_ || prev_.size() != size) {
-      std::ostringstream out;
-      out << "\x1b[2J" << "\x1b[H" << "\x1b[0m";
-      ansi_wrap(out, false);
+      out_ << "\x1b[2J" << "\x1b[H" << "\x1b[0m";
+      ansi_wrap(out_, false);
 
       glyph::core::Style current{};
       bool               has_current = false;
@@ -166,31 +165,30 @@ namespace glyph::render {
           const auto &cell = cur.at(x, y);
 
           if (cell.width == 0) {
-            out << ' ';
+            out_ << ' ';
             continue;
           }
 
           if (!has_current || cell.style != current) {
-            ansi_apply_style(out, cell.style);
+            ansi_apply_style(out_, cell.style);
             current     = cell.style;
             has_current = true;
           }
 
-          out << to_ascii(cell);
+          out_ << to_ascii(cell);
 
           if (cell.width == 2) {
-            out << ' ';
+            out_ << ' ';
             ++x;
           }
         }
         if (y + 1 < size.h) {
-          out << "\r\n";
+          out_ << "\r\n";
         }
       }
 
-      ansi_wrap(out, true);
-      ansi_reset(out);
-      out_ << out.str();
+      ansi_wrap(out_, true);
+      ansi_reset(out_);
 
       prev_.resize(size);
       prev_.blit(cur, glyph::core::Point{0, 0});
