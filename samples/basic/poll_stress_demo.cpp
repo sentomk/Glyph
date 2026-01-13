@@ -33,9 +33,20 @@ namespace {
 
   void render_frame(view::Frame &frame, std::uint64_t polls,
                     std::uint64_t events, std::uint64_t frames,
-                    std::uint64_t fps) {
+                    std::uint64_t fps, core::coord_t phase) {
     auto fg = core::Style{}.fg(0xECEFF4);
     auto dim = core::Style{}.fg(0xA3BE8C).dim();
+
+    const char32_t pattern[] = U" .:-=+*";
+    const auto     bounds = frame.bounds();
+    for (core::coord_t y = bounds.top(); y < bounds.bottom(); ++y) {
+      for (core::coord_t x = bounds.left(); x < bounds.right(); ++x) {
+        const auto t = (x + y + phase) % 7;
+        auto style = (t < 3) ? core::Style{}.fg(0x4C566A).dim()
+                             : core::Style{}.fg(0x3B4252);
+        frame.set(core::Point{x, y}, core::Cell(pattern[t], style));
+      }
+    }
 
     auto title = view::LabelView(U"Glyph Poll Stress")
                      .set_align(view::layout::AlignH::Center,
@@ -49,7 +60,7 @@ namespace {
     line2 += to_u32(events);
     std::u32string line3 = U"frames     : ";
     line3 += to_u32(frames);
-    std::u32string line4 = U"fps (avg)  : ";
+    std::u32string line4 = U"fps (inst) : ";
     line4 += to_u32(fps);
 
     auto stats =
@@ -74,6 +85,14 @@ namespace {
         1);
 
     layout.render(frame, frame.bounds());
+
+    const auto bar_y = core::coord_t(bounds.top() + (phase % bounds.size.h));
+    const core::Rect bar_rect{
+        core::Point{bounds.left(), bar_y},
+        core::Size{bounds.size.w, 1}};
+    frame.fill_rect(
+        bar_rect,
+        core::Cell::from_char(U' ', core::Style{}.bg(0x5E81AC)));
   }
 
 } // namespace
@@ -92,6 +111,7 @@ int main() {
 
   const auto start = std::chrono::steady_clock::now();
   auto       next_frame = start;
+  auto       last_render = start;
   const auto frame_step = 16ms;
 
   for (;;) {
@@ -118,12 +138,17 @@ int main() {
     }
 
     view::Frame frame{size, core::Cell::from_char(U' ')};
-    const auto elapsed =
-        std::chrono::duration_cast<std::chrono::seconds>(now - start);
-    const auto seconds = std::max<std::uint64_t>(1, elapsed.count());
-    const auto fps = frames / seconds;
-    render_frame(frame, polls, events, frames, fps);
+    const auto render_time = std::chrono::steady_clock::now();
+    const auto delta_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            render_time - last_render)
+            .count();
+    const auto fps =
+        static_cast<std::uint64_t>(delta_us > 0 ? 1000000 / delta_us : 0);
+    const auto phase = core::coord_t(frames % 7);
+    render_frame(frame, polls, events, frames, fps, phase);
     app.render(frame);
+    last_render = render_time;
     ++frames;
   }
 
