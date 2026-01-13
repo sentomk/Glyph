@@ -175,7 +175,8 @@ int main() {
 
   render::TerminalApp app{std::cout};
   input::WinInput     input{};
-  input::InputGuard   guard(input, input::InputMode::Raw);
+  input::InputGuard   guard(input, input::InputMode::Raw |
+                                      input::InputMode::Mouse);
   bool                should_quit = false;
   bool                needs_render = true;
   core::Size           last_size{};
@@ -208,35 +209,47 @@ int main() {
 
     for (;;) {
       auto ev = input.poll();
-      if (!std::holds_alternative<core::KeyEvent>(ev)) {
-        break;
-      }
-
-      const auto &key = std::get<core::KeyEvent>(ev);
-      if (key.code == core::KeyCode::Char &&
-          (key.ch == U'q' || key.ch == U'Q')) {
-        should_quit = true;
+      if (std::holds_alternative<std::monostate>(ev)) {
         break;
       }
 
       const auto prev = scroll.offset;
-      if (key.code == core::KeyCode::Up) {
-        scroll.scroll_by(-1);
+      if (std::holds_alternative<core::KeyEvent>(ev)) {
+        const auto &key = std::get<core::KeyEvent>(ev);
+        if (key.code == core::KeyCode::Char &&
+            (key.ch == U'q' || key.ch == U'Q')) {
+          should_quit = true;
+          break;
+        }
+        if (key.code == core::KeyCode::Up) {
+          scroll.scroll_by(-1);
+        }
+        else if (key.code == core::KeyCode::Down) {
+          scroll.scroll_by(1);
+        }
+        else if (key.code == core::KeyCode::PageUp) {
+          scroll.scroll_by(-scroll.viewport);
+        }
+        else if (key.code == core::KeyCode::PageDown) {
+          scroll.scroll_by(scroll.viewport);
+        }
+        else if (key.code == core::KeyCode::Home) {
+          scroll.scroll_to_start();
+        }
+        else if (key.code == core::KeyCode::End) {
+          scroll.scroll_to_end();
+        }
       }
-      else if (key.code == core::KeyCode::Down) {
-        scroll.scroll_by(1);
-      }
-      else if (key.code == core::KeyCode::PageUp) {
-        scroll.scroll_by(-scroll.viewport);
-      }
-      else if (key.code == core::KeyCode::PageDown) {
-        scroll.scroll_by(scroll.viewport);
-      }
-      else if (key.code == core::KeyCode::Home) {
-        scroll.scroll_to_start();
-      }
-      else if (key.code == core::KeyCode::End) {
-        scroll.scroll_to_end();
+      else if (std::holds_alternative<core::MouseEvent>(ev)) {
+        const auto &mouse = std::get<core::MouseEvent>(ev);
+        if (mouse.action == core::MouseAction::Scroll) {
+          if (mouse.button == core::MouseButton::WheelUp) {
+            scroll.scroll_by(-1);
+          }
+          else if (mouse.button == core::MouseButton::WheelDown) {
+            scroll.scroll_by(1);
+          }
+        }
       }
 
       if (scroll.offset != prev) {

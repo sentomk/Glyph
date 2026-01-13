@@ -7,6 +7,7 @@
 
 #include <cassert>
 #include <cctype>
+#include <cstring>
 #include <winuser.h>
 
 namespace glyph::input {
@@ -73,6 +74,7 @@ namespace glyph::input {
 
   WinInput::WinInput() {
     in_ = GetStdHandle(STD_INPUT_HANDLE);
+    out_ = GetStdHandle(STD_OUTPUT_HANDLE);
     if (in_ == INVALID_HANDLE_VALUE) {
       return;
     }
@@ -80,6 +82,9 @@ namespace glyph::input {
   }
 
   WinInput::~WinInput() {
+    if (vt_mouse_enabled_) {
+      set_vt_mouse(false);
+    }
     if (in_ != INVALID_HANDLE_VALUE) {
       SetConsoleMode(in_, original_mode_);
     }
@@ -105,6 +110,9 @@ namespace glyph::input {
     // Mouse: enable mouse input.
     if ((mode & InputMode::Mouse) != InputMode::None) {
       m |= ENABLE_MOUSE_INPUT;
+      m |= ENABLE_WINDOW_INPUT;
+      m |= ENABLE_EXTENDED_FLAGS;
+      m &= ~ENABLE_QUICK_EDIT_MODE;
     }
 
     // Paste: no-op in this minimal version (VT bracketed paste is output-side).
@@ -112,6 +120,14 @@ namespace glyph::input {
 
     SetConsoleMode(in_, m);
     mode_ = mode;
+
+    const bool want_mouse = (mode & InputMode::Mouse) != InputMode::None;
+    if (want_mouse && !vt_mouse_enabled_) {
+      set_vt_mouse(true);
+    }
+    else if (!want_mouse && vt_mouse_enabled_) {
+      set_vt_mouse(false);
+    }
   }
 
   core::Mod WinInput::translate_mods(DWORD state) const noexcept {
@@ -142,6 +158,16 @@ namespace glyph::input {
     pending_.push_back(ev);
   }
 
+  void WinInput::emit_mouse(core::MouseButton button, core::MouseAction action,
+                            core::Point pos, core::Mod mods) {
+    core::MouseEvent ev{};
+    ev.button = button;
+    ev.action = action;
+    ev.pos    = pos;
+    ev.mods   = mods;
+    pending_.push_back(ev);
+  }
+
   void WinInput::flush_ansi(bool force) {
     if (!force)
       return;
@@ -152,6 +178,7 @@ namespace glyph::input {
 
     ansi_state_ = AnsiState::Ground;
     params_.clear();
+    mouse_sgr_ = false;
   }
 
   void WinInput::process_chars() {
@@ -212,6 +239,95 @@ namespace glyph::input {
         ansi_state_ = AnsiState::Ground;
         break;
       case AnsiState::Csi:
+        if (mouse_sgr_) {
+          if (in.ch == U'M' || in.ch == U'm') {
+            int values[3] = {0, 0, 0};
+            int idx = 0;
+            int current = 0;
+            bool has_digit = false;
+            for (char32_t ch : params_) {
+              if (ch >= U'0' && ch <= U'9') {
+                current = current * 10 + int(ch - U'0');
+                has_digit = true;
+              }
+              else if (ch == U';') {
+                if (idx < 3) {
+                  values[idx++] = has_digit ? current : 0;
+                }
+                current = 0;
+                has_digit = false;
+              }
+            }
+            if (idx < 3) {
+              values[idx] = has_digit ? current : 0;
+              ++idx;
+            }
+
+            if (idx >= 3) {
+              const int b = values[0];
+              const int x = values[1];
+              const int y = values[2];
+
+              core::Mod mods = core::Mod::None;
+              if (b & 4)
+                mods = mods | core::Mod::Shift;
+              if (b & 8)
+                mods = mods | core::Mod::Alt;
+              if (b & 16)
+                mods = mods | core::Mod::Ctrl;
+
+              const core::Point pos{
+                  core::coord_t(std::max(0, x - 1)),
+                  core::coord_t(std::max(0, y - 1))};
+
+              if (b >= 64 && b <= 65) {
+                const auto button = (b == 64) ? core::MouseButton::WheelUp
+                                              : core::MouseButton::WheelDown;
+                emit_mouse(button, core::MouseAction::Scroll, pos, mods);
+              }
+              else {
+                const int btn = b & 3;
+                core::MouseButton button = core::MouseButton::Left;
+                if (btn == 1)
+                  button = core::MouseButton::Middle;
+                else if (btn == 2)
+                  button = core::MouseButton::Right;
+
+                if ((b & 32) != 0) {
+                  emit_mouse(button, core::MouseAction::Drag, pos, mods);
+                }
+                else if (in.ch == U'm' || btn == 3) {
+                  emit_mouse(button, core::MouseAction::Up, pos, mods);
+                }
+                else {
+                  emit_mouse(button, core::MouseAction::Down, pos, mods);
+                }
+              }
+            }
+
+            ansi_state_ = AnsiState::Ground;
+            params_.clear();
+            mouse_sgr_ = false;
+            break;
+          }
+
+          if ((in.ch >= U'0' && in.ch <= U'9') || in.ch == U';') {
+            params_.push_back(in.ch);
+            break;
+          }
+
+          ansi_state_ = AnsiState::Ground;
+          params_.clear();
+          mouse_sgr_ = false;
+          break;
+        }
+
+        if (in.ch == U'<') {
+          mouse_sgr_ = true;
+          params_.clear();
+          break;
+        }
+
         if (in.ch == U'~') {
           int param = 0;
           for (char32_t ch : params_) {
@@ -281,6 +397,7 @@ namespace glyph::input {
 
         ansi_state_ = AnsiState::Ground;
         params_.clear();
+        mouse_sgr_ = false;
         break;
       }
     }
@@ -307,6 +424,80 @@ namespace glyph::input {
     }
   }
 
+  core::Event WinInput::translate_mouse(const MOUSE_EVENT_RECORD &mouse) {
+    const auto mods = translate_mods(mouse.dwControlKeyState);
+    const core::Point pos{
+        static_cast<core::coord_t>(mouse.dwMousePosition.X),
+        static_cast<core::coord_t>(mouse.dwMousePosition.Y)};
+
+    if (mouse.dwEventFlags == MOUSE_WHEELED) {
+      const auto delta =
+          static_cast<SHORT>((mouse.dwButtonState >> 16) & 0xFFFF);
+      const auto button = (delta > 0) ? core::MouseButton::WheelUp
+                                      : core::MouseButton::WheelDown;
+      emit_mouse(button, core::MouseAction::Scroll, pos, mods);
+      if (!pending_.empty()) {
+        auto ev = pending_.front();
+        pending_.pop_front();
+        return ev;
+      }
+      return std::monostate{};
+    }
+
+    if (mouse.dwEventFlags == MOUSE_HWHEELED) {
+      return std::monostate{};
+    }
+
+    if (mouse.dwEventFlags == MOUSE_MOVED) {
+      const bool dragging = mouse.dwButtonState != 0;
+      core::MouseButton button = core::MouseButton::Left;
+      if (mouse.dwButtonState & RIGHTMOST_BUTTON_PRESSED) {
+        button = core::MouseButton::Right;
+      }
+      else if (mouse.dwButtonState & FROM_LEFT_2ND_BUTTON_PRESSED) {
+        button = core::MouseButton::Middle;
+      }
+      emit_mouse(button,
+                 dragging ? core::MouseAction::Drag
+                          : core::MouseAction::Move,
+                 pos, mods);
+      if (!pending_.empty()) {
+        auto ev = pending_.front();
+        pending_.pop_front();
+        return ev;
+      }
+      return std::monostate{};
+    }
+
+    DWORD changed = mouse.dwButtonState ^ last_button_state_;
+    if (changed == 0) {
+      last_button_state_ = mouse.dwButtonState;
+      return std::monostate{};
+    }
+
+    auto push_button = [&](DWORD mask, core::MouseButton button) {
+      if ((changed & mask) == 0) {
+        return;
+      }
+      const bool pressed = (mouse.dwButtonState & mask) != 0;
+      emit_mouse(button, pressed ? core::MouseAction::Down
+                                 : core::MouseAction::Up,
+                 pos, mods);
+    };
+
+    push_button(FROM_LEFT_1ST_BUTTON_PRESSED, core::MouseButton::Left);
+    push_button(RIGHTMOST_BUTTON_PRESSED, core::MouseButton::Right);
+    push_button(FROM_LEFT_2ND_BUTTON_PRESSED, core::MouseButton::Middle);
+
+    last_button_state_ = mouse.dwButtonState;
+    if (!pending_.empty()) {
+      auto ev = pending_.front();
+      pending_.pop_front();
+      return ev;
+    }
+    return std::monostate{};
+  }
+
   core::Event WinInput::translate_resize(const WINDOW_BUFFER_SIZE_RECORD &sz) {
     core::ResizeEvent ev{};
     ev.size = core::Size{
@@ -320,6 +511,8 @@ namespace glyph::input {
     case KEY_EVENT:
       enqueue_key(rec.Event.KeyEvent);
       return std::monostate{};
+    case MOUSE_EVENT:
+      return translate_mouse(rec.Event.MouseEvent);
     case WINDOW_BUFFER_SIZE_EVENT:
       return translate_resize(rec.Event.WindowBufferSizeEvent);
     default:
@@ -411,6 +604,20 @@ namespace glyph::input {
         flush_ansi(true);
       }
     }
+  }
+
+  void WinInput::set_vt_mouse(bool enabled) {
+    if (out_ == INVALID_HANDLE_VALUE) {
+      vt_mouse_enabled_ = enabled;
+      return;
+    }
+
+    const char *seq = enabled ? "\x1b[?1000h\x1b[?1006h"
+                              : "\x1b[?1000l\x1b[?1006l";
+    DWORD written = 0;
+    WriteConsoleA(out_, seq, static_cast<DWORD>(std::strlen(seq)), &written,
+                  nullptr);
+    vt_mouse_enabled_ = enabled;
   }
 
 } // namespace glyph::input
