@@ -2,8 +2,9 @@
 //
 // Component demo: shows FillView, LabelView, PanelView, BarView, and TableView.
 
-#include <iostream>
+#include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -11,8 +12,9 @@
 #include "glyph/core/cell.h"
 #include "glyph/core/geometry.h"
 #include "glyph/core/style.h"
-#include "glyph/render/ansi/ansi_renderer.h"
 #include "glyph/render/terminal.h"
+#include "glyph/input/input_guard.h"
+#include "glyph/input/win32/win_input.h"
 #include "glyph/view/frame.h"
 #include "glyph/view/view.h"
 
@@ -24,10 +26,13 @@
 #include "glyph/view/components/table.h"
 #include "glyph/view/layout/box.h"
 #include "glyph/view/layout/inset.h"
+#include "glyph/view/layout/scroll.h"
 
 namespace {
 
-  void render_demo(glyph::view::Frame &frame) {
+  void render_demo(glyph::view::Frame &frame,
+                   const std::vector<glyph::view::TableView::Row> &rows,
+                   glyph::view::layout::ScrollModel &scroll) {
     using namespace glyph;
 
     // Step 1: Clear the frame with a visible background.
@@ -39,6 +44,20 @@ namespace {
     if (area.empty()) {
       return;
     }
+
+    view::layout::BoxItem cols[] = {
+        {-1, 1},
+        {-1, 1},
+        {-1, 1},
+    };
+    const auto col_rects =
+        view::layout::layout_box(view::layout::Axis::Horizontal, area, cols, 1);
+    if (col_rects.rects.size() < 3) {
+      return;
+    }
+
+    const auto left_area = col_rects.rects[0];
+    const auto right_area = col_rects.rects[2];
 
     // Step 3: Build left column content (fill + styled title).
     view::FillView  fill_left(core::Cell::from_char(U'L'));
@@ -78,11 +97,29 @@ namespace {
         U' ', core::Style{}.fg(0xEBCB8B).bold()));
     table.set_cell(core::Cell::from_char(
         U' ', core::Style{}.fg(0xD8DEE9)));
-    table.set_rows({
-        {U"CPU", U"Active", U"24%"},
-        {U"Mem", U"Normal", U"5.1G"},
-        {U"IO", U"Idle", U"0.2G"},
-    });
+    const auto right_inner =
+        view::layout::inset_rect(right_area, view::layout::Insets::all(1));
+    view::layout::BoxItem right_items[] = {
+        {1, 0},
+        {-1, 1},
+        {2, 0},
+    };
+    const auto right_layout = view::layout::layout_box(
+        view::layout::Axis::Vertical, right_inner, right_items, 1);
+    const auto table_height =
+        right_layout.rects.size() >= 2 ? right_layout.rects[1].size.h : 0;
+
+    scroll.set_content(static_cast<core::coord_t>(rows.size()));
+    scroll.set_viewport(table_height);
+
+    std::vector<view::TableView::Row> visible_rows;
+    const auto start = std::max<core::coord_t>(0, scroll.visible_start());
+    const auto end = std::min<core::coord_t>(
+        static_cast<core::coord_t>(rows.size()), scroll.visible_end());
+    for (core::coord_t i = start; i < end; ++i) {
+      visible_rows.push_back(rows[static_cast<std::size_t>(i)]);
+    }
+    table.set_rows(std::move(visible_rows));
 
     view::LabelView bottom(
         U"Ellipsis: The quick brown fox jumps over the lazy dog.");
@@ -125,20 +162,8 @@ namespace {
     layout.render(frame, area);
 
     // Step 8: Place the title inside the left column only.
-    view::layout::BoxItem cols[] = {
-        {-1, 1},
-        {-1, 1},
-        {-1, 1},
-    };
-    const auto col_rects =
-        view::layout::layout_box(view::layout::Axis::Horizontal, area, cols, 1);
-
-    if (col_rects.rects.empty()) {
-      return;
-    }
-
     const auto title_area = view::layout::inset_rect(
-        col_rects.rects[0], view::layout::Insets::all(1));
+        left_area, view::layout::Insets::all(1));
     title.render(frame, title_area);
   }
 
@@ -148,40 +173,89 @@ int main() {
   using namespace glyph;
   using namespace std::chrono_literals;
 
-  render::TerminalSession session{std::cout};
-  render::AnsiRenderer r{std::cout};
-  render::TerminalSize last{};
-  bool first = true;
+  render::TerminalApp app{std::cout};
+  input::WinInput     input{};
+  input::InputGuard   guard(input, input::InputMode::Raw);
+  bool                should_quit = false;
+  bool                needs_render = true;
+  core::Size           last_size{};
+
+  std::vector<view::TableView::Row> rows = {
+      {U"CPU", U"Active", U"24%"},
+      {U"Mem", U"Normal", U"5.1G"},
+      {U"IO", U"Idle", U"0.2G"},
+      {U"Net", U"Active", U"1.2G"},
+      {U"GPU", U"Idle", U"3%"},
+  };
+  view::layout::ScrollModel scroll;
+  scroll.set_content(static_cast<core::coord_t>(rows.size()));
+  scroll.set_viewport(1);
 
   for (;;) {
-    const auto term = render::get_terminal_size();
-    const auto width = term.valid ? term.cols : 60;
-    const auto height = term.valid ? term.rows : 14;
+    const auto term = app.size();
+    const auto size =
+        core::Size{term.valid ? term.cols : 60, term.valid ? term.rows : 14};
 
-    if (width <= 0 || height <= 0) {
+    if (size.w <= 0 || size.h <= 0) {
       std::this_thread::sleep_for(50ms);
       continue;
     }
 
-    const bool size_changed =
-        first || width != last.cols || height != last.rows ||
-        term.valid != last.valid;
-    if (size_changed) {
-      view::Frame frame{core::Size{width, height}};
-      render_demo(frame);
-      r.render(frame);
+    if (size != last_size) {
+      needs_render = true;
+      last_size = size;
+    }
 
-      last.cols = width;
-      last.rows = height;
-      last.valid = term.valid;
-      first = false;
-
-      if (!term.valid) {
+    for (;;) {
+      auto ev = input.poll();
+      if (!std::holds_alternative<core::KeyEvent>(ev)) {
         break;
+      }
+
+      const auto &key = std::get<core::KeyEvent>(ev);
+      if (key.code == core::KeyCode::Char &&
+          (key.ch == U'q' || key.ch == U'Q')) {
+        should_quit = true;
+        break;
+      }
+
+      const auto prev = scroll.offset;
+      if (key.code == core::KeyCode::Up) {
+        scroll.scroll_by(-1);
+      }
+      else if (key.code == core::KeyCode::Down) {
+        scroll.scroll_by(1);
+      }
+      else if (key.code == core::KeyCode::PageUp) {
+        scroll.scroll_by(-scroll.viewport);
+      }
+      else if (key.code == core::KeyCode::PageDown) {
+        scroll.scroll_by(scroll.viewport);
+      }
+      else if (key.code == core::KeyCode::Home) {
+        scroll.scroll_to_start();
+      }
+      else if (key.code == core::KeyCode::End) {
+        scroll.scroll_to_end();
+      }
+
+      if (scroll.offset != prev) {
+        needs_render = true;
       }
     }
 
-    std::this_thread::sleep_for(50ms);
+    if (should_quit) {
+      break;
+    }
+
+    if (needs_render) {
+      view::Frame frame{size};
+      render_demo(frame, rows, scroll);
+      app.render(frame);
+      needs_render = false;
+    }
+
+    std::this_thread::sleep_for(16ms);
   }
 
   return 0;

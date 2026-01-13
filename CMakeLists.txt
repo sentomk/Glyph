@@ -79,6 +79,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/layout/align.h
   include/glyph/view/layout/box.h
   include/glyph/view/layout/inset.h
+  include/glyph/view/layout/scroll.h
   include/glyph/view/layout/split.h
   include/glyph/view/layout/types.h
 
