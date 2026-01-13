@@ -1,0 +1,192 @@
+// glyph/view/components/table.h
+//
+// TableView: render a simple table with fixed/flex columns.
+//
+// Responsibilities:
+//   - Render column headers and rows with horizontal alignment.
+//   - Clip text to column width.
+
+#pragma once
+
+#include <algorithm>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "glyph/core/cell.h"
+#include "glyph/core/geometry.h"
+#include "glyph/view/frame.h"
+#include "glyph/view/layout/align.h"
+#include "glyph/view/layout/box.h"
+#include "glyph/view/view.h"
+
+namespace glyph::view {
+
+  class TableView final : public View {
+  public:
+    struct Column final {
+      std::u32string   title{};
+      core::coord_t    width  = -1; // <0 = flex
+      core::coord_t    weight = 1;
+      layout::AlignH   align  = layout::AlignH::Left;
+    };
+
+    using Row = std::vector<std::u32string>;
+
+    explicit TableView(std::vector<Column> columns = {})
+        : columns_(std::move(columns)) {
+    }
+
+    void set_columns(std::vector<Column> columns) {
+      columns_ = std::move(columns);
+    }
+
+    void set_rows(std::vector<Row> rows) {
+      rows_ = std::move(rows);
+    }
+
+    void add_row(Row row) {
+      rows_.push_back(std::move(row));
+    }
+
+    void clear_rows() {
+      rows_.clear();
+    }
+
+    void set_show_header(bool enabled) {
+      show_header_ = enabled;
+    }
+
+    void set_column_spacing(core::coord_t spacing) {
+      spacing_ = std::max<core::coord_t>(0, spacing);
+    }
+
+    void set_cell(core::Cell cell) {
+      cell_ = cell;
+    }
+
+    void set_header_cell(core::Cell cell) {
+      header_cell_ = cell;
+    }
+
+    void render(Frame &f, core::Rect area) const override {
+      if (area.empty() || columns_.empty()) {
+        return;
+      }
+
+      std::vector<layout::BoxItem> items;
+      items.reserve(columns_.size());
+      for (const auto &col : columns_) {
+        layout::BoxItem item{};
+        if (col.width >= 0) {
+          item.main = col.width;
+          item.flex = 0;
+        }
+        else {
+          item.main = -1;
+          item.flex = std::max<core::coord_t>(1, col.weight);
+        }
+        items.push_back(item);
+      }
+
+      const auto layout_out =
+          layout::layout_box(layout::Axis::Horizontal, area, items, spacing_);
+      if (layout_out.rects.empty()) {
+        return;
+      }
+
+      const auto max_cols = std::min(layout_out.rects.size(), columns_.size());
+      core::coord_t y = area.top();
+
+      if (show_header_ && y < area.bottom()) {
+        for (std::size_t i = 0; i < max_cols; ++i) {
+          const auto rect = row_rect(layout_out.rects[i], y);
+          render_cell(f, rect, columns_[i].title, columns_[i].align,
+                      header_cell_);
+        }
+        y = core::coord_t(y + 1);
+      }
+
+      const core::coord_t max_rows =
+          std::min<core::coord_t>(area.bottom() - y,
+                                  static_cast<core::coord_t>(rows_.size()));
+      for (core::coord_t row = 0; row < max_rows; ++row) {
+        const auto &cells = rows_[static_cast<std::size_t>(row)];
+        for (std::size_t col = 0; col < max_cols; ++col) {
+          const auto rect = row_rect(layout_out.rects[col], y);
+          const std::u32string_view text =
+              (col < cells.size()) ? std::u32string_view(cells[col])
+                                   : std::u32string_view{};
+          render_cell(f, rect, text, columns_[col].align, cell_);
+        }
+        y = core::coord_t(y + 1);
+      }
+    }
+
+  private:
+    static core::Rect row_rect(core::Rect col, core::coord_t y) {
+      return core::Rect{core::Point{col.left(), y},
+                        core::Size{col.size.w, 1}};
+    }
+
+    static core::coord_t text_width(std::u32string_view text) {
+      core::coord_t w = 0;
+      for (char32_t ch : text) {
+        w = core::coord_t(w + core::cell_width(ch));
+      }
+      return w;
+    }
+
+    static void render_cell(Frame &f, core::Rect area,
+                            std::u32string_view text, layout::AlignH align,
+                            core::Cell cell) {
+      if (area.empty() || area.size.w <= 0) {
+        return;
+      }
+
+      core::coord_t x = area.left();
+      const core::coord_t available = area.size.w;
+      const core::coord_t width = text_width(text);
+
+      if (width <= available) {
+        switch (align) {
+        case layout::AlignH::Center:
+          x = core::coord_t(area.left() + (available - width) / 2);
+          break;
+        case layout::AlignH::Right:
+          x = core::coord_t(area.right() - width);
+          break;
+        case layout::AlignH::Left:
+        case layout::AlignH::Stretch:
+        default:
+          x = area.left();
+          break;
+        }
+      }
+
+      for (char32_t ch : text) {
+        const core::coord_t w = core::coord_t(core::cell_width(ch));
+        if (w <= 0) {
+          continue;
+        }
+        if (x + w > area.right()) {
+          break;
+        }
+        core::Cell out = cell;
+        out.ch = ch;
+        out.width = static_cast<std::uint8_t>(w);
+        f.set(core::Point{x, area.top()}, out);
+        x = core::coord_t(x + w);
+      }
+    }
+
+    std::vector<Column> columns_{};
+    std::vector<Row>    rows_{};
+    core::Cell          cell_{core::Cell::from_char(U' ')};
+    core::Cell          header_cell_{core::Cell::from_char(U' ')};
+    core::coord_t       spacing_ = 1;
+    bool                show_header_ = true;
+  };
+
+} // namespace glyph::view

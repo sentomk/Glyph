@@ -1,10 +1,12 @@
 ﻿// samples/basic/components_demo.cpp
 //
-// Component demo: shows FillView, LabelView, PanelView, and Stack layout.
+// Component demo: shows FillView, LabelView, PanelView, BarView, and TableView.
 
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include "glyph/core/cell.h"
 #include "glyph/core/geometry.h"
@@ -16,9 +18,10 @@
 
 #include "glyph/view/components/panel.h"
 #include "glyph/view/components/stack.h"
-#include "glyph/view/components/inset.h"
 #include "glyph/view/components/fill.h"
 #include "glyph/view/components/label.h"
+#include "glyph/view/components/bar.h"
+#include "glyph/view/components/table.h"
 #include "glyph/view/layout/box.h"
 #include "glyph/view/layout/inset.h"
 
@@ -49,12 +52,37 @@ namespace {
     // Step 4: Build center column content (panel with fill + border).
     view::FillView fill_mid(core::Cell::from_char(U' '));
 
-    // Step 5: Build right column content (two padded labels in a VStack).
-    view::LabelView top(U"Wrap: The quick brown fox jumps over the lazy dog.");
-    top.set_align(view::layout::AlignH::Left, view::layout::AlignV::Top);
-    top.set_wrap_mode(view::LabelView::WrapMode::Word);
+    // Step 5: Build right column content (bar + table + ellipsis label).
+    const auto bar_bg = core::Cell::from_char(
+        U' ', core::Style{}.bg(0x2E3440));
+    auto bar_left =
+        view::LabelView(U"Status: OK")
+            .set_align(view::layout::AlignH::Left,
+                       view::layout::AlignV::Center)
+            .set_cell(core::Cell::from_char(U' ', core::Style{}.fg(0xECEFF4)));
+    auto bar_right =
+        view::LabelView(U"F1 Help")
+            .set_align(view::layout::AlignH::Right,
+                       view::layout::AlignV::Center)
+            .set_cell(core::Cell::from_char(U' ', core::Style{}.fg(0xECEFF4)));
+    auto bar_overlay = view::ZStackView({&bar_left, &bar_right});
+    view::BarView top_bar(&bar_overlay, bar_bg);
 
-    view::InsetView top_pad(&top, view::layout::Insets::all(1));
+    std::vector<view::TableView::Column> columns = {
+        {U"Name", 8, 1, view::layout::AlignH::Left},
+        {U"State", -1, 1, view::layout::AlignH::Left},
+        {U"Value", 6, 1, view::layout::AlignH::Right},
+    };
+    view::TableView table(std::move(columns));
+    table.set_header_cell(core::Cell::from_char(
+        U' ', core::Style{}.fg(0xEBCB8B).bold()));
+    table.set_cell(core::Cell::from_char(
+        U' ', core::Style{}.fg(0xD8DEE9)));
+    table.set_rows({
+        {U"CPU", U"Active", U"24%"},
+        {U"Mem", U"Normal", U"5.1G"},
+        {U"IO", U"Idle", U"0.2G"},
+    });
 
     view::LabelView bottom(
         U"Ellipsis: The quick brown fox jumps over the lazy dog.");
@@ -62,12 +90,11 @@ namespace {
     bottom.set_wrap(false);
     bottom.set_ellipsis(true);
 
-    view::InsetView bottom_pad(&bottom, view::layout::Insets::all(1));
-
     auto right_content = view::VStack(
         {
-            view::StackChild{.view = &top_pad, .weight = 1},
-            view::StackChild{.view = &bottom_pad, .weight = 1},
+            view::Fixed(top_bar, 1),
+            view::Flex(table, 1),
+            view::Fixed(bottom, 2),
         },
         1);
 

@@ -74,6 +74,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/components/label.h
   include/glyph/view/components/panel.h
   include/glyph/view/components/stack.h
+  include/glyph/view/components/table.h
   # view/layout
   include/glyph/view/layout/align.h
   include/glyph/view/layout/box.h
