@@ -145,12 +145,11 @@ namespace glyph::view {
 
       const core::coord_t available_rows =
           std::max<core::coord_t>(0, core::coord_t(area.bottom() - y));
-      scroll_.set_content(static_cast<core::coord_t>(rows_.size()));
-      scroll_.set_viewport(available_rows);
+      const auto scroll = make_scroll(available_rows);
 
-      const auto start = std::max<core::coord_t>(0, scroll_.visible_start());
+      const auto start = std::max<core::coord_t>(0, scroll.visible_start());
       const auto end = std::min<core::coord_t>(
-          static_cast<core::coord_t>(rows_.size()), scroll_.visible_end());
+          static_cast<core::coord_t>(rows_.size()), scroll.visible_end());
       core::coord_t row_y = y;
       for (core::coord_t row = start; row < end; ++row) {
         const auto &cells = rows_[static_cast<std::size_t>(row)];
@@ -230,6 +229,13 @@ namespace glyph::view {
         f.set(core::Point{x, area.top()}, out);
         x = core::coord_t(x + w);
       }
+    }
+
+    layout::ScrollModel make_scroll(core::coord_t viewport) const {
+      layout::ScrollModel scroll = scroll_;
+      scroll.set_content(static_cast<core::coord_t>(rows_.size()));
+      scroll.set_viewport(viewport);
+      return scroll;
     }
 
     std::vector<Column> columns_{};

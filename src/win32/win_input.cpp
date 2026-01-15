@@ -412,8 +412,21 @@ namespace glyph::input {
     const bool repeat = (key.wRepeatCount > 1);
 
     if (key.uChar.UnicodeChar != 0) {
-      char_queue_.push_back(
-          CharInput{static_cast<char32_t>(key.uChar.UnicodeChar), mods});
+      const auto ch = static_cast<char32_t>(key.uChar.UnicodeChar);
+      if (ch == U'\t') {
+        emit_key(core::KeyCode::Tab, mods, repeat);
+        return;
+      }
+      if (ch == U'\r' || ch == U'\n') {
+        emit_key(core::KeyCode::Enter, mods, repeat);
+        return;
+      }
+      if (ch == U'\b') {
+        emit_key(core::KeyCode::Backspace, mods, repeat);
+        return;
+      }
+
+      char_queue_.push_back(CharInput{ch, mods});
       process_chars();
       return;
     }
