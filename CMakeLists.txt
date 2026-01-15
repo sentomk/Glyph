@@ -70,6 +70,7 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/components/border.h
   include/glyph/view/components/bar.h
   include/glyph/view/components/fill.h
+  include/glyph/view/components/focus.h
   include/glyph/view/components/inset.h
   include/glyph/view/components/label.h
   include/glyph/view/components/panel.h

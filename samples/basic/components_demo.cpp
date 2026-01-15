@@ -23,6 +23,7 @@
 #include "glyph/view/components/fill.h"
 #include "glyph/view/components/label.h"
 #include "glyph/view/components/bar.h"
+#include "glyph/view/components/focus.h"
 #include "glyph/view/components/table.h"
 #include "glyph/view/layout/box.h"
 #include "glyph/view/layout/inset.h"
@@ -32,7 +33,9 @@ namespace {
 
   void render_demo(glyph::view::Frame &frame,
                    const std::vector<glyph::view::TableView::Row> &rows,
-                   glyph::view::layout::ScrollModel &scroll) {
+                   glyph::view::layout::ScrollModel &scroll,
+                   const glyph::view::SelectionModel &selection,
+                   bool focused) {
     using namespace glyph;
 
     // Step 1: Clear the frame with a visible background.
@@ -112,14 +115,14 @@ namespace {
     scroll.set_content(static_cast<core::coord_t>(rows.size()));
     scroll.set_viewport(table_height);
 
-    std::vector<view::TableView::Row> visible_rows;
-    const auto start = std::max<core::coord_t>(0, scroll.visible_start());
-    const auto end = std::min<core::coord_t>(
-        static_cast<core::coord_t>(rows.size()), scroll.visible_end());
-    for (core::coord_t i = start; i < end; ++i) {
-      visible_rows.push_back(rows[static_cast<std::size_t>(i)]);
-    }
-    table.set_rows(std::move(visible_rows));
+    table.set_rows(rows);
+    table.set_scroll_offset(scroll.offset);
+    table.set_selected_row(selection.selected);
+    table.set_focused(focused);
+    table.set_selected_cell(core::Cell::from_char(
+        U' ', core::Style{}.bg(0x4C566A).fg(0xECEFF4)));
+    table.set_unfocused_selected_cell(core::Cell::from_char(
+        U' ', core::Style{}.bg(0x3B4252).fg(0xD8DEE9)));
 
     view::LabelView bottom(
         U"Ellipsis: The quick brown fox jumps over the lazy dog.");
@@ -191,6 +194,11 @@ int main() {
   view::layout::ScrollModel scroll;
   scroll.set_content(static_cast<core::coord_t>(rows.size()));
   scroll.set_viewport(1);
+  view::SelectionModel selection;
+  selection.set_count(static_cast<core::coord_t>(rows.size()));
+  selection.set_selected(1);
+  view::FocusModel focus;
+  focus.set_count(2);
 
   for (;;) {
     const auto term = app.size();
@@ -214,6 +222,7 @@ int main() {
       }
 
       const auto prev = scroll.offset;
+      const auto prev_selected = selection.selected;
       if (std::holds_alternative<core::KeyEvent>(ev)) {
         const auto &key = std::get<core::KeyEvent>(ev);
         if (key.code == core::KeyCode::Char &&
@@ -221,11 +230,18 @@ int main() {
           should_quit = true;
           break;
         }
+        if (key.code == core::KeyCode::Tab) {
+          focus.next();
+          needs_render = true;
+          continue;
+        }
         if (key.code == core::KeyCode::Up) {
-          scroll.scroll_by(-1);
+          selection.set_selected(
+              core::coord_t(selection.selected - 1));
         }
         else if (key.code == core::KeyCode::Down) {
-          scroll.scroll_by(1);
+          selection.set_selected(
+              core::coord_t(selection.selected + 1));
         }
         else if (key.code == core::KeyCode::PageUp) {
           scroll.scroll_by(-scroll.viewport);
@@ -252,7 +268,11 @@ int main() {
         }
       }
 
-      if (scroll.offset != prev) {
+      if (selection.selected != prev_selected) {
+        scroll.ensure_visible(selection.selected, 1);
+      }
+
+      if (scroll.offset != prev || selection.selected != prev_selected) {
         needs_render = true;
       }
     }
@@ -263,7 +283,7 @@ int main() {
 
     if (needs_render) {
       view::Frame frame{size};
-      render_demo(frame, rows, scroll);
+      render_demo(frame, rows, scroll, selection, focus.is_focused(0));
       app.render(frame);
       needs_render = false;
     }

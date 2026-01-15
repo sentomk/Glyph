@@ -19,6 +19,7 @@
 #include "glyph/view/frame.h"
 #include "glyph/view/layout/align.h"
 #include "glyph/view/layout/box.h"
+#include "glyph/view/layout/scroll.h"
 #include "glyph/view/view.h"
 
 namespace glyph::view {
@@ -58,8 +59,42 @@ namespace glyph::view {
       show_header_ = enabled;
     }
 
+    void set_focused(bool focused) {
+      focused_ = focused;
+    }
+
+    void set_selected_row(core::coord_t row) {
+      selected_row_ = row;
+    }
+
+    void set_selected_cell(core::Cell cell) {
+      selected_cell_ = cell;
+      has_selected_cell_ = true;
+    }
+
+    void set_unfocused_selected_cell(core::Cell cell) {
+      unfocused_selected_cell_ = cell;
+      has_unfocused_selected_cell_ = true;
+    }
+
     void set_column_spacing(core::coord_t spacing) {
       spacing_ = std::max<core::coord_t>(0, spacing);
+    }
+
+    void set_scroll_offset(core::coord_t offset) {
+      scroll_.set_offset(offset);
+    }
+
+    void scroll_by(core::coord_t delta) {
+      scroll_.scroll_by(delta);
+    }
+
+    void scroll_to_start() {
+      scroll_.scroll_to_start();
+    }
+
+    void scroll_to_end() {
+      scroll_.scroll_to_end();
     }
 
     void set_cell(core::Cell cell) {
@@ -108,19 +143,35 @@ namespace glyph::view {
         y = core::coord_t(y + 1);
       }
 
-      const core::coord_t max_rows =
-          std::min<core::coord_t>(area.bottom() - y,
-                                  static_cast<core::coord_t>(rows_.size()));
-      for (core::coord_t row = 0; row < max_rows; ++row) {
+      const core::coord_t available_rows =
+          std::max<core::coord_t>(0, core::coord_t(area.bottom() - y));
+      scroll_.set_content(static_cast<core::coord_t>(rows_.size()));
+      scroll_.set_viewport(available_rows);
+
+      const auto start = std::max<core::coord_t>(0, scroll_.visible_start());
+      const auto end = std::min<core::coord_t>(
+          static_cast<core::coord_t>(rows_.size()), scroll_.visible_end());
+      core::coord_t row_y = y;
+      for (core::coord_t row = start; row < end; ++row) {
         const auto &cells = rows_[static_cast<std::size_t>(row)];
+        const bool  selected = (row == selected_row_);
         for (std::size_t col = 0; col < max_cols; ++col) {
-          const auto rect = row_rect(layout_out.rects[col], y);
+          const auto rect = row_rect(layout_out.rects[col], row_y);
           const std::u32string_view text =
               (col < cells.size()) ? std::u32string_view(cells[col])
                                    : std::u32string_view{};
-          render_cell(f, rect, text, columns_[col].align, cell_);
+          core::Cell cell = cell_;
+          if (selected) {
+            if (focused_ && has_selected_cell_) {
+              cell = selected_cell_;
+            }
+            else if (!focused_ && has_unfocused_selected_cell_) {
+              cell = unfocused_selected_cell_;
+            }
+          }
+          render_cell(f, rect, text, columns_[col].align, cell);
         }
-        y = core::coord_t(y + 1);
+        row_y = core::coord_t(row_y + 1);
       }
     }
 
@@ -185,8 +236,15 @@ namespace glyph::view {
     std::vector<Row>    rows_{};
     core::Cell          cell_{core::Cell::from_char(U' ')};
     core::Cell          header_cell_{core::Cell::from_char(U' ')};
+    core::Cell          selected_cell_{core::Cell::from_char(U' ')};
+    core::Cell          unfocused_selected_cell_{core::Cell::from_char(U' ')};
+    layout::ScrollModel scroll_{};
     core::coord_t       spacing_ = 1;
     bool                show_header_ = true;
+    bool                focused_ = false;
+    core::coord_t       selected_row_ = -1;
+    bool                has_selected_cell_ = false;
+    bool                has_unfocused_selected_cell_ = false;
   };
 
 } // namespace glyph::view
