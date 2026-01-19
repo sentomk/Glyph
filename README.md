@@ -1,6 +1,6 @@
 # Glyph
 
-Glyph is a modern C++ TUI (Terminal UI) engine prototype. It provides a clear *semantic 2D canvas* abstraction and pluggable rendering backends. Current status is **0.1.x prototype**, and APIs may change.
+Glyph is a modern C++ TUI (Terminal UI) engine prototype. It provides a clear *semantic 2D canvas* abstraction and pluggable rendering backends. Current status is **0.3.0 prototype**, and APIs may change.
 
 ## Goals & Positioning
 
@@ -15,19 +15,22 @@ View → Frame (semantic draw) → Renderer (backend output)
 
 - **core/**: geometry / Cell / Buffer / width rules / dirty / diff
 - **view/**: semantic drawing interfaces (View, Frame, Canvas)
-- **view/layout/**: pure layout helpers (box/stack/inset/align/split)
+- **view/layout/**: pure layout helpers (box/stack/inset/align/split/scroll)
+- **view/components/**: Label/Panel/Bar/Table/Focus
 - **render/**: backend output (ANSI / Debug)
 - **input/**: unified event model + Windows input backend
 
 Layering rule: upper layers do not depend on lower-level details; backends are replaceable.
 
-## Current Features (0.1.2)
+## Current Features (0.3.0)
 - Semantic 2D canvas and minimal draw pipeline
 - `Cell` width policy + write-time dirty marking
-- ANSI renderer (diff/dirty optimized)
-- Windows input (chars / Esc / basic keys)
-- Layout helpers: box/stack/inset/align/split (pure rect slicing)
-- Demos: ANSI animation + layout demo
+- ANSI renderer (diff/dirty optimized, true-color styles)
+- Windows input (VT key sequences + mouse wheel)
+- Layout helpers: box/stack/inset/align/split + scroll model
+- Components: LabelView, PanelView, BarView, TableView
+- Focus/selection models for list/table style components
+- Demos: aurora_dashboard, components_demo, bar_demo, poll_stress_demo, snake_demo
 
 ## Example
 Build & run:
@@ -44,12 +47,23 @@ Layout demo:
 
 Exit with `Esc` or `Q`.
 
+Component demo:
+```
+./build/components_demo
+```
+
+UI demo:
+```
+./build/aurora_dashboard
+```
+
 ## Directory Layout
 ```
 include/glyph/
   core/    core types, geometry, Cell, Buffer, diff
   view/    View/Frame/Canvas
-  view/layout/  box/stack/inset/align/split
+  view/layout/  box/stack/inset/align/split/scroll
+  view/components/  Label/Panel/Bar/Table/Focus
   render/  Renderer/ANSI/Debug
   input/   Event/Input/WinInput
 src/
@@ -62,15 +76,16 @@ samples/
 - **Lightweight core**: keep core types small and stable
 
 ## Known Limitations (current)
-- Windows input only
-- ANSI output is minimal (no color/style yet)
-- No component library yet
+- Windows input only (no Unix/macOS backend yet)
+- TableView is basic (no virtualization or column resizing)
+- No chart/graph components yet
+- No text input component yet
 
 ## Roadmap
-- Color/style (16/256/truecolor)
-- Layout layer (grid/flow/dock)
+- Charts (line chart, progress bar)
+- System stats (CPU/memory/process list)
+- Glyph-Top demo (table + charts + status)
 - Cross-platform input (Unix/macOS)
-- Components (Label/Border/Block/Paragraph)
 
 ## Dev Guide (quick)
 ### Add a renderer backend
