@@ -17,6 +17,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 # ------------------------------------------------------------
 # Utils
@@ -119,6 +120,52 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
       FILES ${GLYPH_PUBLIC_HEADERS}
   )
 endif()
+
+# ------------------------------------------------------------
+# Install (CMake package)
+# ------------------------------------------------------------
+
+set(GLYPH_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/glyph")
+
+install(TARGETS glyph
+  EXPORT glyphTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
+  install(TARGETS glyph
+    FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+else()
+  install(DIRECTORY include/glyph
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
+
+install(EXPORT glyphTargets
+  NAMESPACE glyph::
+  DESTINATION ${GLYPH_INSTALL_CMAKEDIR}
+)
+
+configure_package_config_file(
+  cmake/glyphConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/glyphConfig.cmake
+  INSTALL_DESTINATION ${GLYPH_INSTALL_CMAKEDIR}
+)
+
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/glyphConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/glyphConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/glyphConfigVersion.cmake
+  DESTINATION ${GLYPH_INSTALL_CMAKEDIR}
+)
 
 # ------------------------------------------------------------
 # Samples

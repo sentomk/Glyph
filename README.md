@@ -57,6 +57,19 @@ UI demo:
 ./build/aurora_dashboard
 ```
 
+## Install (CMake)
+```
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/path/to/install
+cmake --build build
+cmake --install build
+```
+
+Then use:
+```
+find_package(glyph CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE glyph::glyph)
+```
+
 ## Directory Layout
 ```
 include/glyph/
