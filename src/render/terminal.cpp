@@ -2,17 +2,34 @@
 //
 // Terminal helpers with platform-specific implementations.
 
-#include "glyph/render/terminal.h"
-
+#if defined(GLYPH_USE_MODULES)
+module;
 #include <ostream>
-
-#include "glyph/view/frame.h"
-
 #if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <sys/ioctl.h>
 #include <unistd.h>
+#endif
+module glyph;
+#else
+#include "glyph/render/terminal.h"
+#include "glyph/view/frame.h"
+#include <ostream>
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <sys/ioctl.h>
+#include <unistd.h>
+#endif
 #endif
 
 namespace glyph::render {

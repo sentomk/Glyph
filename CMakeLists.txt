@@ -20,6 +20,13 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 # ------------------------------------------------------------
+# Options
+# ------------------------------------------------------------
+
+option(GLYPH_ENABLE_MODULES "Enable C++20 modules (experimental)" OFF)
+option(GLYPH_BUILD_SAMPLES "Build sample executables" ON)
+
+# ------------------------------------------------------------
 # Utils
 # ------------------------------------------------------------
 
@@ -121,6 +128,22 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
   )
 endif()
 
+if(GLYPH_ENABLE_MODULES)
+  if(CMAKE_VERSION VERSION_LESS 3.28)
+    message(FATAL_ERROR "GLYPH_ENABLE_MODULES requires CMake 3.28+")
+  endif()
+
+  target_sources(glyph
+    PUBLIC
+      FILE_SET CXX_MODULES
+      BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+      FILES
+        modules/glyph.cppm
+  )
+
+  target_compile_definitions(glyph PRIVATE GLYPH_USE_MODULES=1)
+endif()
+
 # ------------------------------------------------------------
 # Install (CMake package)
 # ------------------------------------------------------------
@@ -128,13 +151,24 @@ endif()
 set(GLYPH_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/glyph")
 
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
-  install(TARGETS glyph
-    EXPORT glyphTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  )
+  if(GLYPH_ENABLE_MODULES)
+    install(TARGETS glyph
+      EXPORT glyphTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+      FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+  else()
+    install(TARGETS glyph
+      EXPORT glyphTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+  endif()
 else()
   install(TARGETS glyph
     EXPORT glyphTargets
@@ -174,76 +208,87 @@ install(FILES
 # Samples
 # ------------------------------------------------------------
 
-# debug_render
-add_executable(debug_render
-  samples/basic/debug_render.cpp
-)
-target_link_libraries(debug_render
-  PRIVATE glyph::glyph
-)
+if(GLYPH_BUILD_SAMPLES AND NOT GLYPH_ENABLE_MODULES)
+  # debug_render
+  add_executable(debug_render
+    samples/basic/debug_render.cpp
+  )
+  target_link_libraries(debug_render
+    PRIVATE glyph::glyph
+  )
 
-# ansi_render
-add_executable(ansi_render
-  samples/basic/ansi_render.cpp
-)
-target_link_libraries(ansi_render
-  PRIVATE glyph::glyph
-)
+  # ansi_render
+  add_executable(ansi_render
+    samples/basic/ansi_render.cpp
+  )
+  target_link_libraries(ansi_render
+    PRIVATE glyph::glyph
+  )
 
-# layout_demo
-add_executable(layout_demo
-  samples/basic/layout_demo.cpp
-)
-target_link_libraries(layout_demo
-  PRIVATE glyph::glyph
-)
-
-
-# layout_gallery
-add_executable(layout_gallery
-  samples/basic/layout_gallery.cpp
-)
-target_link_libraries(layout_gallery
-  PRIVATE glyph::glyph
-)
+  # layout_demo
+  add_executable(layout_demo
+    samples/basic/layout_demo.cpp
+  )
+  target_link_libraries(layout_demo
+    PRIVATE glyph::glyph
+  )
 
 
-# components_demo
-add_executable(components_demo
-  samples/basic/components_demo.cpp
-)
-target_link_libraries(components_demo
-  PRIVATE glyph::glyph
-)
+  # layout_gallery
+  add_executable(layout_gallery
+    samples/basic/layout_gallery.cpp
+  )
+  target_link_libraries(layout_gallery
+    PRIVATE glyph::glyph
+  )
 
-# bar_demo
-add_executable(bar_demo
-  samples/basic/bar_demo.cpp
-)
-target_link_libraries(bar_demo
-  PRIVATE glyph::glyph
-)
 
-# ui_demo
-add_executable(aurora_dashboard
-  samples/ui/aurora_dashboard.cpp
-)
-target_link_libraries(aurora_dashboard
-  PRIVATE glyph::glyph
-)
+  # components_demo
+  add_executable(components_demo
+    samples/basic/components_demo.cpp
+  )
+  target_link_libraries(components_demo
+    PRIVATE glyph::glyph
+  )
 
-# snake_demo
-add_executable(snake_demo
-  samples/basic/snake_demo.cpp
-)
-target_link_libraries(snake_demo
-  PRIVATE glyph::glyph
-)
+  # bar_demo
+  add_executable(bar_demo
+    samples/basic/bar_demo.cpp
+  )
+  target_link_libraries(bar_demo
+    PRIVATE glyph::glyph
+  )
 
-# poll_stress_demo
-add_executable(poll_stress_demo
-  samples/basic/poll_stress_demo.cpp
-)
-target_link_libraries(poll_stress_demo
-  PRIVATE glyph::glyph
-)
+  # ui_demo
+  add_executable(aurora_dashboard
+    samples/ui/aurora_dashboard.cpp
+  )
+  target_link_libraries(aurora_dashboard
+    PRIVATE glyph::glyph
+  )
+
+  # snake_demo
+  add_executable(snake_demo
+    samples/basic/snake_demo.cpp
+  )
+  target_link_libraries(snake_demo
+    PRIVATE glyph::glyph
+  )
+
+  # poll_stress_demo
+  add_executable(poll_stress_demo
+    samples/basic/poll_stress_demo.cpp
+  )
+  target_link_libraries(poll_stress_demo
+    PRIVATE glyph::glyph
+  )
+endif()
+
+if(GLYPH_BUILD_SAMPLES AND GLYPH_ENABLE_MODULES)
+  add_executable(module_demo
+    samples/modules/module_demo.cpp
+  )
+  target_link_libraries(module_demo
+    PRIVATE glyph::glyph
+  )
+endif()

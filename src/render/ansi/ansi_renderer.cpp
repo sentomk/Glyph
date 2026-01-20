@@ -7,11 +7,18 @@
 //   - Incremental updates via diff spans on dirty lines.
 //   - Styles emitted as SGR only when they change.
 
+#if defined(GLYPH_USE_MODULES)
+module;
+#include <cstdint>
+#include <ostream>
+#include <vector>
+module glyph;
+#else
 #include "glyph/render/ansi/ansi_renderer.h"
-
 #include "glyph/core/diff.h"
 #include "glyph/view/frame.h"
 #include <ostream>
+#endif
 
 namespace glyph::render {
 

@@ -2,13 +2,27 @@
 //
 // Windows console input backend (minimal).
 
+#if defined(GLYPH_USE_MODULES)
+module;
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <algorithm>
+#include <cassert>
+#include <cctype>
+#include <cstring>
+#include <variant>
+module glyph;
+#else
 #include "glyph/input/win32/win_input.h"
 #include "glyph/core/event.h"
-
 #include <cassert>
 #include <cctype>
 #include <cstring>
 #include <winuser.h>
+#endif
 
 namespace glyph::input {
 

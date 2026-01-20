@@ -2,10 +2,15 @@
 //
 // Implementation of the debug render pipeline.
 
+#if defined(GLYPH_USE_MODULES)
+module;
+#include <ostream>
+module glyph;
+#else
 #include "glyph/render/debug/debug_renderer.h"
-
 #include "glyph/view/frame.h"
 #include <ostream>
+#endif
 
 namespace glyph::render {
 
