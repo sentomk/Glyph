@@ -127,18 +127,21 @@ endif()
 
 set(GLYPH_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/glyph")
 
-install(TARGETS glyph
-  EXPORT glyphTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
   install(TARGETS glyph
+    EXPORT glyphTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   )
 else()
+  install(TARGETS glyph
+    EXPORT glyphTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
   install(DIRECTORY include/glyph
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   )
@@ -242,5 +245,13 @@ add_executable(poll_stress_demo
   samples/basic/poll_stress_demo.cpp
 )
 target_link_libraries(poll_stress_demo
+  PRIVATE glyph::glyph
+)
+
+# agent_chat
+add_executable(agent_chat
+  samples/ui/agent_chat.cpp
+)
+target_link_libraries(agent_chat
   PRIVATE glyph::glyph
 )

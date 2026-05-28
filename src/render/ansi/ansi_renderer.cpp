@@ -12,6 +12,7 @@
 #include "glyph/core/diff.h"
 #include "glyph/view/frame.h"
 #include <ostream>
+#include <sstream>
 
 namespace glyph::render {
 
@@ -97,9 +98,29 @@ namespace glyph::render {
     out << "m";
   }
 
-  // Convert a cell to printable ASCII fallback (1 codepoint).
-  static char to_ascii(const view::Frame::cell_type &c) noexcept {
-    return c.ch ? static_cast<char>(c.ch) : ' ';
+  // Encode a single codepoint as UTF-8 into the output stream.
+  static void emit_utf8(std::ostream &out, char32_t cp) noexcept {
+    if (cp == 0) {
+      out << ' ';
+      return;
+    }
+    if (cp < 0x80) {
+      out << static_cast<char>(cp);
+    } else if (cp < 0x800) {
+      out << static_cast<char>(0xC0 | (cp >> 6));
+      out << static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+      out << static_cast<char>(0xE0 | (cp >> 12));
+      out << static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+      out << static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x110000) {
+      out << static_cast<char>(0xF0 | (cp >> 18));
+      out << static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+      out << static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+      out << static_cast<char>(0x80 | (cp & 0x3F));
+    } else {
+      out << '?';
+    }
   }
 
   // Render a single dirty span with style tracking.
@@ -128,7 +149,7 @@ namespace glyph::render {
         has_current = true;
       }
 
-      out << to_ascii(cell);
+      emit_utf8(out, cell.ch);
 
       if (cell.width == 2) {
         out << ' ';
@@ -140,9 +161,8 @@ namespace glyph::render {
   void AnsiRenderer::render(const view::Frame &frame) {
     if (frame.empty()) {
       if (has_prev_) {
-        ansi_clear(out_);
-        ansi_home(out_);
-        ansi_reset(out_);
+        out_ << "\x1b[2J\x1b[H\x1b[0m";
+        out_.flush();
         has_prev_ = false;
       }
       return;
@@ -151,10 +171,12 @@ namespace glyph::render {
     const auto size = frame.size();
     const auto cur  = frame.view();
 
+    std::ostringstream buf;
+
     // First frame or size change: full redraw.
     if (!has_prev_ || prev_.size() != size) {
-      out_ << "\x1b[2J" << "\x1b[H" << "\x1b[0m";
-      ansi_wrap(out_, false);
+      buf << "\x1b[H\x1b[0m";
+      ansi_wrap(buf, false);
 
       glyph::core::Style current{};
       bool               has_current = false;
@@ -164,34 +186,37 @@ namespace glyph::render {
           const auto &cell = cur.at(x, y);
 
           if (cell.width == 0) {
-            out_ << ' ';
+            buf << ' ';
             continue;
           }
 
           if (!has_current || cell.style != current) {
-            ansi_apply_style(out_, cell.style);
+            ansi_apply_style(buf, cell.style);
             current     = cell.style;
             has_current = true;
           }
 
-          out_ << to_ascii(cell);
+          emit_utf8(buf, cell.ch);
 
           if (cell.width == 2) {
-            out_ << ' ';
+            buf << ' ';
             ++x;
           }
         }
         if (y + 1 < size.h) {
-          out_ << "\r\n";
+          buf << "\r\n";
         }
       }
 
-      ansi_wrap(out_, true);
-      ansi_reset(out_);
+      ansi_wrap(buf, true);
+      ansi_reset(buf);
 
       prev_.resize(size);
       prev_.blit(cur, glyph::core::Point{0, 0});
       has_prev_ = true;
+
+      out_ << buf.str();
+      out_.flush();
       return;
     }
 
@@ -204,7 +229,6 @@ namespace glyph::render {
     const auto                        prev_view = prev_.const_view();
     std::vector<glyph::core::coord_t> changed_lines;
     if (dirty_lines.size() < std::size_t(size.h / 4)) {
-      // Filter dirty lines by content hash to avoid unnecessary diff spans.
       changed_lines.reserve(dirty_lines.size());
       for (auto y : dirty_lines) {
         if (glyph::core::hash_line(prev_view, y) !=
@@ -221,7 +245,7 @@ namespace glyph::render {
       changed_lines.assign(dirty_lines.begin(), dirty_lines.end());
     }
 
-    ansi_wrap(out_, false);
+    ansi_wrap(buf, false);
 
     glyph::core::Style current{};
     bool               has_current = false;
@@ -229,13 +253,16 @@ namespace glyph::render {
     const auto spans = glyph::core::diff_spans(prev_view, cur, changed_lines);
 
     for (const auto &span : spans) {
-      render_span(out_, cur, span, current, has_current);
+      render_span(buf, cur, span, current, has_current);
     }
 
-    ansi_wrap(out_, true);
-    ansi_reset(out_);
+    ansi_wrap(buf, true);
+    ansi_reset(buf);
 
     prev_.blit(cur, glyph::core::Point{0, 0});
+
+    out_ << buf.str();
+    out_.flush();
   }
 
 } // namespace glyph::render
