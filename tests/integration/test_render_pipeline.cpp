@@ -43,6 +43,23 @@ TEST_CASE("LabelView renders text into the frame") {
   CHECK(row.find(U"Hi") != std::u32string::npos);
 }
 
+TEST_CASE("LabelView writes wide glyphs with correct width and spacer") {
+  // Regression: a wide CJK glyph must be stored with width 2 and a
+  // zero-width spacer, or the renderer mis-aligns columns (the same class
+  // of bug fixed in TextInputView / AnsiRenderer).
+  view::Frame frame{core::Size{8, 1}};
+  frame.fill(core::Cell::from_char(U' '));
+
+  view::LabelView label{U"中a"};
+  label.render(frame, frame.bounds());
+
+  const auto v = frame.view();
+  CHECK(v.at(0, 0).ch == U'中');
+  CHECK(v.at(0, 0).width == 2);
+  CHECK(v.at(1, 0).width == 0); // spacer
+  CHECK(v.at(2, 0).ch == U'a'); // aligned at column 2
+}
+
 TEST_CASE("LabelView right alignment places text at the end") {
   view::Frame frame{core::Size{6, 1}};
   frame.fill(core::Cell::from_char(U' '));

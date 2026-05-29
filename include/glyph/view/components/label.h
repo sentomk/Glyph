@@ -375,6 +375,7 @@ namespace glyph::view {
 
         core::Cell c = cell_;
         c.ch         = ch;
+        c.width      = static_cast<std::uint8_t>(w);
         f.set(core::Point{cursor, y_coord}, c);
 
         cursor = core::coord_t(cursor + w);
