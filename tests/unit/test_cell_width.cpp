@@ -42,6 +42,28 @@ TEST_CASE("cell_width: boundary codepoints") {
   CHECK(cell_width(0xFF61) == 1);
 }
 
+TEST_CASE("cell_width: standalone emoji are wide") {
+  CHECK(cell_width(U'\U0001F600') == 2); // grinning face 😀
+  CHECK(cell_width(U'\U0001F44D') == 2); // thumbs up 👍
+  CHECK(cell_width(U'\U0001F680') == 2); // rocket 🚀
+  CHECK(cell_width(U'\U0001F9FF') == 2); // nazar amulet (end of ext range)
+  CHECK(cell_width(U'\U0001F1E8') == 2); // regional indicator C (flag half)
+}
+
+TEST_CASE("cell_width: emoji range boundaries") {
+  CHECK(cell_width(0x1F2FF) == 2); // last enclosed-ideographic
+  CHECK(cell_width(0x1F300) == 2); // first pictograph
+  CHECK(cell_width(0x1FAFF) == 2); // last of ext-A coverage
+  CHECK(cell_width(0x1FB00) == 1); // just past emoji coverage -> narrow
+}
+
+TEST_CASE("cell_width: text-presentation symbols stay narrow (phase 1)") {
+  // These are narrow by default and only widen with U+FE0F, which is a
+  // sequence-level concern not handled at the codepoint level yet.
+  CHECK(cell_width(0x2764) == 1); // heavy black heart ❤
+  CHECK(cell_width(0x2600) == 1); // sun ☀
+}
+
 TEST_CASE("Cell derives width from its codepoint") {
   Cell narrow = Cell::from_char(U'A');
   CHECK(narrow.ch == U'A');
