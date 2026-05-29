@@ -304,12 +304,16 @@ namespace glyph::input::detail {
     if (!force) {
       return;
     }
+    // Only resolve a lone ESC (ESC seen, no introducer yet) into an Esc key.
+    // A mid-sequence CSI/SS3/paste must be preserved: it may simply be split
+    // across reads, and resetting it here would drop the rest of the
+    // sequence (e.g. an arrow key arriving as ESC '[' then 'A').
     if (state_ == State::Esc) {
       emit_key(core::KeyCode::Esc, esc_mods_);
+      state_ = State::Ground;
+      params_.clear();
+      mouse_sgr_ = false;
     }
-    state_     = State::Ground;
-    params_.clear();
-    mouse_sgr_ = false;
   }
 
 } // namespace glyph::input::detail

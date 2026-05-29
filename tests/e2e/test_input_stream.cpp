@@ -112,3 +112,30 @@ TEST_CASE("E2E: bracketed paste with UTF-8 payload") {
   REQUIRE(std::holds_alternative<PasteEvent>(ev[0]));
   CHECK(std::get<PasteEvent>(ev[0]).text == U"a中");
 }
+
+TEST_CASE("E2E: an escape sequence split across reads is not dropped") {
+  // Regression for the "吞字" bug: a flush between reads must not discard a
+  // sequence that is merely split. ESC '[' arrives, a flush happens, then
+  // 'A' arrives — the result must still be a single Up key.
+  VtDecoder dec;
+  dec.feed(U'\x1b');
+  dec.feed(U'[');
+  CHECK(dec.in_sequence());   // mid-CSI: must not be flushed away
+  dec.flush(true);            // conservative flush should be a no-op here
+  CHECK(dec.in_sequence());
+  dec.feed(U'A');
+  dec.flush(true);
+
+  REQUIRE(dec.has_event());
+  CHECK(as_key(dec.pop()).code == KeyCode::Up);
+  CHECK_FALSE(dec.has_event()); // no stray 'A'
+}
+
+TEST_CASE("E2E: a lone ESC is still resolved on flush") {
+  VtDecoder dec;
+  dec.feed(U'\x1b');
+  CHECK(dec.in_sequence());
+  dec.flush(true);
+  REQUIRE(dec.has_event());
+  CHECK(as_key(dec.pop()).code == KeyCode::Esc);
+}

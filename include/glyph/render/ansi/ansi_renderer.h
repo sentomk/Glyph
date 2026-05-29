@@ -11,6 +11,7 @@
 
 #include "glyph/core/buffer.h"
 #include "glyph/render/render.h"
+#include "glyph/view/frame.h"
 #include <iosfwd>
 namespace glyph::render {
 
@@ -22,9 +23,13 @@ namespace glyph::render {
     void reset() noexcept;
 
   private:
+    void reconcile_cursor(const view::Frame::CursorHint &hint);
+
     std::ostream       &out_;
     glyph::core::Buffer prev_{};
     bool                has_prev_ = false;
+    view::Frame::CursorHint prev_cursor_{};
+    bool                    has_prev_cursor_ = false;
   };
 
 } // namespace glyph::render

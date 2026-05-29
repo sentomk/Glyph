@@ -210,15 +210,29 @@ namespace glyph::input {
       }
     }
 
-    // If the read drained the buffer, resolve any lone ESC.
+    // If the decoder is mid-sequence, the rest may simply be split across
+    // reads (common with escape sequences and IME commits). Give it a short
+    // grace poll before resolving, so we neither drop the tail nor misread a
+    // genuine lone ESC. Only flush once nothing more arrives.
     if (!block) {
-      struct pollfd again {};
-      again.fd     = fd_in_;
-      again.events = POLLIN;
-      if (::poll(&again, 1, 0) == 0) {
-        decoder_.flush(true);
-        drain_decoder();
+      if (decoder_.in_sequence()) {
+        struct pollfd again {};
+        again.fd     = fd_in_;
+        again.events = POLLIN;
+        // ~30ms grace, akin to a terminal ESCDELAY.
+        if (::poll(&again, 1, 30) > 0 && (again.revents & POLLIN)) {
+          char          more[512];
+          const ssize_t m = ::read(fd_in_, more, sizeof(more));
+          if (m > 0) {
+            feed_bytes(more, static_cast<std::size_t>(m));
+            drain_decoder();
+          }
+        }
       }
+      // Resolve a still-pending lone ESC (flush is conservative and will
+      // not disturb a CSI/SS3/paste that is genuinely still in progress).
+      decoder_.flush(true);
+      drain_decoder();
     }
   }
 

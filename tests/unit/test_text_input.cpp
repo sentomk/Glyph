@@ -196,3 +196,55 @@ TEST_CASE("placeholder shows when empty and hides once typed") {
   CHECK(row(frame2, 0).find(U"type...") == std::u32string::npos);
   CHECK(frame2.view().at(0, 0).ch == U'x');
 }
+
+TEST_CASE("reports the hardware cursor at the caret column (IME anchor)") {
+  view::Frame frame{Size{10, 1}};
+  frame.fill(Cell::from_char(U' '));
+
+  TextInputView in{U"abc"};
+  in.set_focused(true);
+  in.set_caret(2);
+  in.render(frame, frame.bounds());
+
+  const auto cur = frame.cursor();
+  CHECK(cur.visible);
+  CHECK(cur.pos == Point{2, 0});
+}
+
+TEST_CASE("cursor reported past a wide glyph accounts for its width") {
+  view::Frame frame{Size{10, 1}};
+  frame.fill(Cell::from_char(U' '));
+
+  TextInputView in{U"中b"}; // 中 occupies columns 0-1, b at column 2
+  in.set_caret(1);          // caret before 'b'
+  in.render(frame, frame.bounds());
+
+  CHECK(frame.cursor().visible);
+  CHECK(frame.cursor().pos == Point{2, 0});
+}
+
+TEST_CASE("unfocused field does not report a cursor") {
+  view::Frame frame{Size{10, 1}};
+  frame.fill(Cell::from_char(U' '));
+
+  TextInputView in{U"abc"};
+  in.set_focused(false);
+  in.render(frame, frame.bounds());
+  CHECK_FALSE(frame.cursor().visible);
+}
+
+TEST_CASE("reverse-block caret keeps wide-glyph width (no spacing corruption)") {
+  // With cursor reporting off, the caret paints a block; landing on a wide
+  // glyph it must keep width 2 so the buffer's spacer pairing is intact.
+  view::Frame frame{Size{10, 1}};
+  frame.fill(Cell::from_char(U' '));
+
+  TextInputView in{U"中b"};
+  in.set_report_cursor(false);
+  in.set_caret(0); // caret on the wide glyph
+  in.render(frame, frame.bounds());
+
+  CHECK(frame.view().at(0, 0).width == 2);
+  CHECK(frame.view().at(1, 0).width == 0); // spacer intact
+  CHECK(frame.view().at(2, 0).ch == U'b'); // 'b' still aligned at column 2
+}

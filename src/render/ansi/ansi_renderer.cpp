@@ -21,7 +21,8 @@ namespace glyph::render {
 
   void AnsiRenderer::reset() noexcept {
     prev_.resize(core::Size{0, 0});
-    has_prev_ = false;
+    has_prev_        = false;
+    has_prev_cursor_ = false;
   }
 
   // Clear the entire screen.
@@ -48,6 +49,19 @@ namespace glyph::render {
   // Enable/disable terminal line wrapping.
   static void ansi_wrap(std::ostream &out, bool enable) {
     out << (enable ? "\x1b[?7h" : "\x1b[?7l");
+  }
+
+  // Apply the frame's cursor hint to the hardware cursor. A visible hint
+  // positions and shows the cursor (so an IME anchors its candidate window
+  // correctly); otherwise the cursor stays hidden.
+  static void ansi_apply_cursor(std::ostream                    &out,
+                                const view::Frame::CursorHint &hint) {
+    if (hint.visible) {
+      ansi_move(out, hint.pos.y, hint.pos.x);
+      out << "\x1b[?25h";
+    } else {
+      out << "\x1b[?25l";
+    }
   }
 
   // Emit SGR for the given style (true-color + attributes).
@@ -215,6 +229,9 @@ namespace glyph::render {
       prev_.blit(cur, glyph::core::Point{0, 0});
       has_prev_ = true;
 
+      ansi_apply_cursor(buf, frame.cursor());
+      prev_cursor_     = frame.cursor();
+      has_prev_cursor_ = true;
       out_ << buf.str();
       out_.flush();
       return;
@@ -223,6 +240,7 @@ namespace glyph::render {
     // Dirty lines only.
     const auto dirty_lines = frame.take_dirty_lines();
     if (dirty_lines.empty()) {
+      reconcile_cursor(frame.cursor());
       return;
     }
 
@@ -238,6 +256,7 @@ namespace glyph::render {
       }
 
       if (changed_lines.empty()) {
+        reconcile_cursor(frame.cursor());
         return;
       }
     }
@@ -261,8 +280,27 @@ namespace glyph::render {
 
     prev_.blit(cur, glyph::core::Point{0, 0});
 
+    ansi_apply_cursor(buf, frame.cursor());
+    prev_cursor_     = frame.cursor();
+    has_prev_cursor_ = true;
     out_ << buf.str();
     out_.flush();
+  }
+
+  // Emit a cursor update directly to the stream, but only when the hint
+  // differs from the last one applied — avoids redundant escape output on
+  // frames where nothing (including the caret) moved.
+  void AnsiRenderer::reconcile_cursor(const view::Frame::CursorHint &hint) {
+    if (has_prev_cursor_ && prev_cursor_.visible == hint.visible &&
+        prev_cursor_.pos == hint.pos) {
+      return;
+    }
+    std::ostringstream buf;
+    ansi_apply_cursor(buf, hint);
+    out_ << buf.str();
+    out_.flush();
+    prev_cursor_     = hint;
+    has_prev_cursor_ = true;
   }
 
 } // namespace glyph::render

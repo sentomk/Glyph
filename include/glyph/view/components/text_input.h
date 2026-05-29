@@ -111,6 +111,16 @@ namespace glyph::view {
       return *this;
     }
 
+    // Whether to report the caret as the hardware terminal cursor (so an IME
+    // anchors its candidate window correctly). When true (default) and the
+    // field is focused, render() reports the cursor via Frame::set_cursor()
+    // and does not paint a reverse-video block. When false, it falls back to
+    // drawing the block (useful for renderers without cursor support).
+    TextInputView &set_report_cursor(bool enabled) {
+      report_cursor_ = enabled;
+      return *this;
+    }
+
     // Optional cap on the number of codepoints. <= 0 means unlimited.
     TextInputView &set_max_length(core::coord_t max_len) {
       max_length_ = max_len;
@@ -212,7 +222,7 @@ namespace glyph::view {
       if (text_.empty() && !placeholder_.empty()) {
         render_placeholder(f, area);
         if (draw_caret()) {
-          put_caret(f, area, area.left(), U' ');
+          emit_caret(f, area, area.left(), U' ');
         }
         return;
       }
@@ -253,7 +263,7 @@ namespace glyph::view {
             core::coord_t(area.left() + (caret_col - scroll));
         if (vis_x >= area.left() && vis_x < area.right()) {
           const char32_t under = glyph_at_column(caret_col);
-          put_caret(f, area, vis_x, under);
+          emit_caret(f, area, vis_x, under);
         }
       }
     }
@@ -290,6 +300,20 @@ namespace glyph::view {
       return show_cursor_ && focused_;
     }
 
+    // Caret rendering dispatch: report the hardware cursor (IME-friendly) or
+    // fall back to painting a reverse-video block.
+    void emit_caret(Frame &f, core::Rect area, core::coord_t x,
+                    char32_t under) const {
+      if (x < area.left() || x >= area.right()) {
+        return;
+      }
+      if (report_cursor_) {
+        f.set_cursor(core::Point{x, area.top()});
+      } else {
+        put_caret(f, area, x, under);
+      }
+    }
+
     void put_caret(Frame &f, core::Rect area, core::coord_t x,
                    char32_t under) const {
       if (x < area.left() || x >= area.right()) {
@@ -319,9 +343,11 @@ namespace glyph::view {
               c.style.flags & ~core::Style::FlagFgDefault);
         }
       }
-      if (c.width == 0) {
-        c.width = 1;
-      }
+      // Preserve the wide/narrow width of the glyph under the caret so the
+      // buffer's wide-glyph + spacer pairing stays intact (a forced width=1
+      // here would corrupt column alignment for CJK text).
+      const core::coord_t uw = glyph_width(under);
+      c.width = static_cast<std::uint8_t>(uw > 0 ? uw : 1);
       f.set(core::Point{x, area.top()}, c);
     }
 
@@ -371,6 +397,7 @@ namespace glyph::view {
     bool has_cursor_cell_ = false;
     bool show_cursor_     = true;
     bool focused_         = true;
+    bool report_cursor_   = true;
   };
 
 } // namespace glyph::view

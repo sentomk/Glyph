@@ -105,3 +105,29 @@ TEST_CASE("reset() forces a full redraw on the next frame") {
   // Full redraw again: glyph re-emitted despite identical content.
   CHECK(contains(after_reset, "Q"));
 }
+
+TEST_CASE("a visible cursor hint positions and shows the hardware cursor") {
+  std::ostringstream os;
+  render::AnsiRenderer r{os};
+
+  view::Frame frame{core::Size{6, 2}};
+  frame.fill(core::Cell::from_char(U' '));
+  frame.set_cursor(core::Point{3, 1}); // 0-based col 3, row 1
+  r.render(frame);
+
+  const std::string out = os.str();
+  // 1-based cursor move to row 2, col 4 + show cursor.
+  CHECK(contains(out, "\x1b[2;4H"));
+  CHECK(contains(out, "\x1b[?25h"));
+}
+
+TEST_CASE("no cursor hint hides the hardware cursor") {
+  std::ostringstream os;
+  render::AnsiRenderer r{os};
+
+  view::Frame frame{core::Size{6, 2}};
+  frame.fill(core::Cell::from_char(U' '));
+  r.render(frame); // cursor invisible by default
+
+  CHECK(contains(os.str(), "\x1b[?25l"));
+}

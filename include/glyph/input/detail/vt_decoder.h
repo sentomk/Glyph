@@ -40,6 +40,14 @@ namespace glyph::input::detail {
       return !pending_.empty();
     }
 
+    // Whether the decoder is mid-sequence (an escape sequence or a paste
+    // payload is still being assembled). A caller that flushes on idle must
+    // not flush while this is true, or it would discard a partial sequence
+    // that is merely split across multiple reads.
+    [[nodiscard]] bool in_sequence() const noexcept {
+      return state_ != State::Ground || in_paste_;
+    }
+
     // Pop the next decoded event. Returns monostate when empty.
     [[nodiscard]] core::Event pop();
 

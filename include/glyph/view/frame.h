@@ -103,8 +103,35 @@ namespace glyph::view {
       return buf_.take_dirty_lines();
     }
 
+    // ----------------------------------------------------------
+    // Cursor hint
+    //
+    // A component (e.g. a text field) can report where the hardware
+    // terminal cursor should sit, in frame-local coordinates. The renderer
+    // consumes this to position the real cursor — which is what an IME
+    // anchors its candidate window to. Invisible by default.
+    // ----------------------------------------------------------
+    struct CursorHint final {
+      core::Point pos{};
+      bool        visible = false;
+    };
+
+    void set_cursor(core::Point p) noexcept {
+      cursor_.pos     = p;
+      cursor_.visible = true;
+    }
+
+    void clear_cursor() noexcept {
+      cursor_.visible = false;
+    }
+
+    [[nodiscard]] CursorHint cursor() const noexcept {
+      return cursor_;
+    }
+
   private:
     buffer_type buf_{};
+    CursorHint  cursor_{};
   };
 
 } // namespace glyph::view
