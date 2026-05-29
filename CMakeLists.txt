@@ -16,6 +16,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(GLYPH_BUILD_TESTS "Build Glyph tests" ON)
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -266,3 +268,12 @@ add_executable(agent_chat
 target_link_libraries(agent_chat
   PRIVATE glyph::glyph
 )
+
+# ------------------------------------------------------------
+# Tests
+# ------------------------------------------------------------
+
+if(GLYPH_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
