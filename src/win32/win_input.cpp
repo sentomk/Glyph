@@ -149,15 +149,6 @@ namespace glyph::input {
     pending_.push_back(ev);
   }
 
-  void WinInput::emit_char(char32_t ch, core::Mod mods, bool repeat) {
-    core::KeyEvent ev{};
-    ev.code   = core::KeyCode::Char;
-    ev.ch     = ch;
-    ev.mods   = mods;
-    ev.repeat = repeat;
-    pending_.push_back(ev);
-  }
-
   void WinInput::emit_mouse(core::MouseButton button, core::MouseAction action,
                             core::Point pos, core::Mod mods) {
     core::MouseEvent ev{};
@@ -168,238 +159,9 @@ namespace glyph::input {
     pending_.push_back(ev);
   }
 
-  void WinInput::flush_ansi(bool force) {
-    if (!force)
-      return;
-
-    if (ansi_state_ == AnsiState::Esc) {
-      emit_key(core::KeyCode::Esc, esc_mods_, false);
-    }
-
-    ansi_state_ = AnsiState::Ground;
-    params_.clear();
-    mouse_sgr_ = false;
-  }
-
-  void WinInput::process_chars() {
-    while (!char_queue_.empty()) {
-      const auto in = char_queue_.front();
-      char_queue_.pop_front();
-
-      auto handle_ground = [&](char32_t ch, core::Mod mods, bool repeat) {
-        if (ch == U'\x1b') {
-          ansi_state_ = AnsiState::Esc;
-          esc_mods_   = mods;
-          return;
-        }
-        emit_char(ch, mods, repeat);
-      };
-
-      switch (ansi_state_) {
-      case AnsiState::Ground:
-        handle_ground(in.ch, in.mods, false);
-        break;
-      case AnsiState::Esc:
-        if (in.ch == U'[') {
-          ansi_state_ = AnsiState::Csi;
-          params_.clear();
-          break;
-        }
-        if (in.ch == U'O') {
-          ansi_state_ = AnsiState::Ss3;
-          break;
-        }
-        emit_key(core::KeyCode::Esc, esc_mods_, false);
-        ansi_state_ = AnsiState::Ground;
-        handle_ground(in.ch, in.mods, false);
-        break;
-      case AnsiState::Ss3:
-        switch (in.ch) {
-        case U'A':
-          emit_key(core::KeyCode::Up, core::Mod::None, false);
-          break;
-        case U'B':
-          emit_key(core::KeyCode::Down, core::Mod::None, false);
-          break;
-        case U'C':
-          emit_key(core::KeyCode::Right, core::Mod::None, false);
-          break;
-        case U'D':
-          emit_key(core::KeyCode::Left, core::Mod::None, false);
-          break;
-        case U'H':
-          emit_key(core::KeyCode::Home, core::Mod::None, false);
-          break;
-        case U'F':
-          emit_key(core::KeyCode::End, core::Mod::None, false);
-          break;
-        default:
-          break;
-        }
-        ansi_state_ = AnsiState::Ground;
-        break;
-      case AnsiState::Csi:
-        if (mouse_sgr_) {
-          if (in.ch == U'M' || in.ch == U'm') {
-            int values[3] = {0, 0, 0};
-            int idx = 0;
-            int current = 0;
-            bool has_digit = false;
-            for (char32_t ch : params_) {
-              if (ch >= U'0' && ch <= U'9') {
-                current = current * 10 + int(ch - U'0');
-                has_digit = true;
-              }
-              else if (ch == U';') {
-                if (idx < 3) {
-                  values[idx++] = has_digit ? current : 0;
-                }
-                current = 0;
-                has_digit = false;
-              }
-            }
-            if (idx < 3) {
-              values[idx] = has_digit ? current : 0;
-              ++idx;
-            }
-
-            if (idx >= 3) {
-              const int b = values[0];
-              const int x = values[1];
-              const int y = values[2];
-
-              core::Mod mods = core::Mod::None;
-              if (b & 4)
-                mods = mods | core::Mod::Shift;
-              if (b & 8)
-                mods = mods | core::Mod::Alt;
-              if (b & 16)
-                mods = mods | core::Mod::Ctrl;
-
-              const core::Point pos{
-                  core::coord_t(std::max(0, x - 1)),
-                  core::coord_t(std::max(0, y - 1))};
-
-              if (b >= 64 && b <= 65) {
-                const auto button = (b == 64) ? core::MouseButton::WheelUp
-                                              : core::MouseButton::WheelDown;
-                emit_mouse(button, core::MouseAction::Scroll, pos, mods);
-              }
-              else {
-                const int btn = b & 3;
-                core::MouseButton button = core::MouseButton::Left;
-                if (btn == 1)
-                  button = core::MouseButton::Middle;
-                else if (btn == 2)
-                  button = core::MouseButton::Right;
-
-                if ((b & 32) != 0) {
-                  emit_mouse(button, core::MouseAction::Drag, pos, mods);
-                }
-                else if (in.ch == U'm' || btn == 3) {
-                  emit_mouse(button, core::MouseAction::Up, pos, mods);
-                }
-                else {
-                  emit_mouse(button, core::MouseAction::Down, pos, mods);
-                }
-              }
-            }
-
-            ansi_state_ = AnsiState::Ground;
-            params_.clear();
-            mouse_sgr_ = false;
-            break;
-          }
-
-          if ((in.ch >= U'0' && in.ch <= U'9') || in.ch == U';') {
-            params_.push_back(in.ch);
-            break;
-          }
-
-          ansi_state_ = AnsiState::Ground;
-          params_.clear();
-          mouse_sgr_ = false;
-          break;
-        }
-
-        if (in.ch == U'<') {
-          mouse_sgr_ = true;
-          params_.clear();
-          break;
-        }
-
-        if (in.ch == U'~') {
-          int param = 0;
-          for (char32_t ch : params_) {
-            if (!std::isdigit(static_cast<unsigned char>(ch)))
-              break;
-            param = param * 10 + int(ch - U'0');
-          }
-          switch (param) {
-          case 1:
-          case 7:
-            emit_key(core::KeyCode::Home, core::Mod::None, false);
-            break;
-          case 2:
-            emit_key(core::KeyCode::Insert, core::Mod::None, false);
-            break;
-          case 3:
-            emit_key(core::KeyCode::Delete, core::Mod::None, false);
-            break;
-          case 4:
-          case 8:
-            emit_key(core::KeyCode::End, core::Mod::None, false);
-            break;
-          case 5:
-            emit_key(core::KeyCode::PageUp, core::Mod::None, false);
-            break;
-          case 6:
-            emit_key(core::KeyCode::PageDown, core::Mod::None, false);
-            break;
-          default:
-            break;
-          }
-          ansi_state_ = AnsiState::Ground;
-          break;
-        }
-
-        if (in.ch >= U'0' && in.ch <= U'9') {
-          params_.push_back(in.ch);
-          break;
-        }
-        if (in.ch == U';') {
-          params_.push_back(in.ch);
-          break;
-        }
-
-        switch (in.ch) {
-        case U'A':
-          emit_key(core::KeyCode::Up, core::Mod::None, false);
-          break;
-        case U'B':
-          emit_key(core::KeyCode::Down, core::Mod::None, false);
-          break;
-        case U'C':
-          emit_key(core::KeyCode::Right, core::Mod::None, false);
-          break;
-        case U'D':
-          emit_key(core::KeyCode::Left, core::Mod::None, false);
-          break;
-        case U'H':
-          emit_key(core::KeyCode::Home, core::Mod::None, false);
-          break;
-        case U'F':
-          emit_key(core::KeyCode::End, core::Mod::None, false);
-          break;
-        default:
-          break;
-        }
-
-        ansi_state_ = AnsiState::Ground;
-        params_.clear();
-        mouse_sgr_ = false;
-        break;
-      }
+  void WinInput::drain_decoder() {
+    while (decoder_.has_event()) {
+      pending_.push_back(decoder_.pop());
     }
   }
 
@@ -426,8 +188,9 @@ namespace glyph::input {
         return;
       }
 
-      char_queue_.push_back(CharInput{ch, mods});
-      process_chars();
+      // Route printable / escape bytes through the shared VT decoder.
+      decoder_.feed(ch, mods);
+      drain_decoder();
       return;
     }
 
@@ -569,7 +332,8 @@ namespace glyph::input {
 
     DWORD remaining = 0;
     GetNumberOfConsoleInputEvents(in_, &remaining);
-    flush_ansi(remaining == 0);
+    decoder_.flush(remaining == 0);
+    drain_decoder();
 
     if (!pending_.empty()) {
       auto out = pending_.front();
@@ -614,7 +378,8 @@ namespace glyph::input {
       DWORD remaining = 0;
       GetNumberOfConsoleInputEvents(in_, &remaining);
       if (remaining == 0) {
-        flush_ansi(true);
+        decoder_.flush(true);
+        drain_decoder();
       }
     }
   }

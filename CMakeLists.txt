@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16...3.28)
 
 project(glyph
-  VERSION 0.2.0
+  VERSION 0.3.0
   DESCRIPTION "TUI engine for modern C++"
-  LANGUAGES CXX 
+  LANGUAGES CXX
 )
 
 # ------------------------------------------------------------
@@ -53,7 +53,9 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   # input/
   include/glyph/input/input.h
   include/glyph/input/input_guard.h
+  include/glyph/input/detail/vt_decoder.h
   include/glyph/input/win32/win_input.h
+  include/glyph/input/posix/posix_input.h
 
   # render/
   include/glyph/render/render.h
@@ -91,11 +93,20 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
 # Core Library
 # ------------------------------------------------------------
 
+# Platform-specific input backend.
+if(WIN32)
+  set(GLYPH_INPUT_BACKEND src/win32/win_input.cpp)
+else()
+  set(GLYPH_INPUT_BACKEND src/posix/posix_input.cpp)
+endif()
+
 add_library(glyph
   src/render/terminal.cpp
   src/render/debug/debug_renderer.cpp
   src/render/ansi/ansi_renderer.cpp
-  src/win32/win_input.cpp
+  src/input/vt_decoder.cpp
+  src/input/make_input.cpp
+  ${GLYPH_INPUT_BACKEND}
 )
 
 add_library(glyph::glyph ALIAS glyph)

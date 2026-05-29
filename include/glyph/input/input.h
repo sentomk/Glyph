@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "glyph/core/event.h"
 
 namespace glyph::input {
@@ -44,5 +45,16 @@ namespace glyph::input {
     // Query current input mode.
     virtual InputMode get_mode() const = 0;
   };
+
+  // ------------------------------------------------------------
+  // Construct the platform-default input backend.
+  //
+  //   - Windows  -> WinInput   (console VT mode)
+  //   - POSIX     -> PosixInput (termios raw + VT decoding)
+  //
+  // Samples and apps should depend on the Input interface and obtain a
+  // backend through this factory rather than naming a concrete class.
+  // ------------------------------------------------------------
+  std::unique_ptr<Input> make_default_input();
 
 } // namespace glyph::input

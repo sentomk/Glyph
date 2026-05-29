@@ -10,7 +10,7 @@
 #include "glyph/core/cell.h"
 #include "glyph/core/style.h"
 #include "glyph/input/input_guard.h"
-#include "glyph/input/win32/win_input.h"
+#include "glyph/input/input.h"
 #include "glyph/render/terminal.h"
 #include "glyph/view/components/label.h"
 #include "glyph/view/components/panel.h"
@@ -102,7 +102,8 @@ int main() {
   using namespace std::chrono_literals;
 
   render::TerminalApp app{std::cout};
-  input::WinInput     input{};
+  auto input_owner_ = glyph::input::make_default_input();
+  auto &input = *input_owner_;
   input::InputGuard   guard(input, input::InputMode::Raw);
 
   std::uint64_t polls = 0;

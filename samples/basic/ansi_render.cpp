@@ -19,7 +19,7 @@
 #include "glyph/view/frame.h"
 
 #include "glyph/input/input_guard.h"
-#include "glyph/input/win32//win_input.h"
+#include "glyph/input/input.h"
 
 namespace {
 
@@ -90,7 +90,7 @@ namespace {
     std::ostream &out_;
   };
 
-  bool handle_input(glyph::input::WinInput &input) {
+  bool handle_input(glyph::input::Input &input) {
     auto ev = input.poll();
     if (std::holds_alternative<glyph::core::KeyEvent>(ev)) {
       const auto &k = std::get<glyph::core::KeyEvent>(ev);
@@ -112,7 +112,8 @@ int main() {
   render::AnsiRenderer renderer{std::cout};
   CursorGuard          cursor{std::cout};
 
-  input::WinInput   input;
+  auto input_owner_ = glyph::input::make_default_input();
+  auto &input = *input_owner_;
   input::InputGuard input_guard(input, input::InputMode::Raw);
 
   const core::Size size{48, 14};

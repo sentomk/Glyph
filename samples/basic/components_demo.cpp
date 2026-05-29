@@ -14,7 +14,7 @@
 #include "glyph/core/style.h"
 #include "glyph/render/terminal.h"
 #include "glyph/input/input_guard.h"
-#include "glyph/input/win32/win_input.h"
+#include "glyph/input/input.h"
 #include "glyph/view/frame.h"
 #include "glyph/view/view.h"
 
@@ -177,7 +177,8 @@ int main() {
   using namespace std::chrono_literals;
 
   render::TerminalApp app{std::cout};
-  input::WinInput     input{};
+  auto input_owner_ = glyph::input::make_default_input();
+  auto &input = *input_owner_;
   input::InputGuard   guard(input, input::InputMode::Raw |
                                       input::InputMode::Mouse);
   bool                should_quit = false;

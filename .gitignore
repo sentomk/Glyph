@@ -43,6 +43,9 @@
 # Build Files
 /build
 
+# clangd / tooling cache
+/.cache
+
 # Config
 /.vscode
 TODO.md
