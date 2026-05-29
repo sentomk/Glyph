@@ -166,7 +166,9 @@ namespace glyph::render {
       emit_utf8(out, cell.ch);
 
       if (cell.width == 2) {
-        out << ' ';
+        // The terminal advances two columns for a wide glyph on its own.
+        // Skip the paired spacer cell without emitting anything, or the
+        // terminal cursor would drift one column ahead of the model.
         ++x;
       }
     }
@@ -213,7 +215,8 @@ namespace glyph::render {
           emit_utf8(buf, cell.ch);
 
           if (cell.width == 2) {
-            buf << ' ';
+            // Wide glyph already occupies two terminal columns; just skip
+            // its spacer cell so the cursor stays aligned with the model.
             ++x;
           }
         }

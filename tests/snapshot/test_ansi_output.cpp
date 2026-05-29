@@ -23,6 +23,49 @@ namespace {
   }
 } // namespace
 
+TEST_CASE("wide glyph emits no trailing spacer (column alignment)") {
+  // Regression: a wide CJK glyph occupies two terminal columns on its own.
+  // The renderer must NOT emit an extra space after it, or the terminal
+  // cursor drifts one column past the model — which manifests as uneven
+  // CJK spacing and apparent dropped characters on the next frame.
+  std::ostringstream os;
+  render::AnsiRenderer r{os};
+
+  view::Frame frame{core::Size{6, 1}};
+  frame.fill(core::Cell::from_char(U' '));
+  frame.view().put(core::Point{0, 0}, core::Cell::from_char(U'中'));
+  frame.view().put(core::Point{2, 0}, core::Cell::from_char(U'a'));
+  r.render(frame);
+
+  // 中 = E4 B8 AD in UTF-8, immediately followed by 'a' (no space between).
+  CHECK(contains(os.str(), "\xE4\xB8\xAD" "a"));
+  CHECK_FALSE(contains(os.str(), "\xE4\xB8\xAD" " a"));
+}
+
+TEST_CASE("incremental redraw of a line with a wide glyph stays aligned") {
+  std::ostringstream os;
+  render::AnsiRenderer r{os};
+
+  view::Frame f1{core::Size{6, 1}};
+  f1.fill(core::Cell::from_char(U' '));
+  f1.view().put(core::Point{0, 0}, core::Cell::from_char(U'a'));
+  f1.view().put(core::Point{1, 0}, core::Cell::from_char(U'b'));
+  r.render(f1);
+  const std::size_t mark = os.str().size();
+
+  // Replace with a wide glyph: 中 at col 0-1, b at col 2.
+  view::Frame f2{core::Size{6, 1}};
+  f2.fill(core::Cell::from_char(U' '));
+  (void)f2.take_dirty_lines();
+  f2.view().put(core::Point{0, 0}, core::Cell::from_char(U'中'));
+  f2.view().put(core::Point{2, 0}, core::Cell::from_char(U'b'));
+  r.render(f2);
+
+  const std::string inc = os.str().substr(mark);
+  CHECK(contains(inc, "\xE4\xB8\xAD" "b"));      // no space between 中 and b
+  CHECK_FALSE(contains(inc, "\xE4\xB8\xAD" " ")); // no spacer emitted
+}
+
 TEST_CASE("first frame performs a full redraw") {
   std::ostringstream os;
   render::AnsiRenderer r{os};
