@@ -21,6 +21,7 @@
 #include "glyph/render/terminal.h"
 #include "glyph/view/components/fill.h"
 #include "glyph/view/components/label.h"
+#include "glyph/view/components/text_input.h"
 #include "glyph/view/frame.h"
 #include "glyph/view/layout/align.h"
 #include "glyph/view/layout/inset.h"
@@ -164,7 +165,7 @@ private:
 // Render the full chat UI.
 void render_ui(view::Frame &frame, const std::vector<Message> &messages,
                const StreamState &stream, int spinner_phase,
-               const std::u32string &input_buf, core::coord_t cursor_pos) {
+               view::TextInputView &input_field) {
   const auto bounds = frame.bounds();
   if (bounds.empty()) return;
 
@@ -288,23 +289,22 @@ void render_ui(view::Frame &frame, const std::vector<Message> &messages,
   auto input_content = view::layout::inset_rect(
       input_area, view::layout::Insets::hv(1, 1));
 
-  std::u32string prompt = U"> " + input_buf;
-  // Show cursor.
-  if (!stream.active) {
-    auto cursor_idx = cursor_pos + 2;
-    if (static_cast<std::size_t>(cursor_idx) <= prompt.size()) {
-      prompt.insert(static_cast<std::size_t>(cursor_idx), U"_");
-    }
-  }
-
-  auto input_label =
-      view::LabelView(prompt)
-          .set_align(view::layout::AlignH::Left,
-                     view::layout::AlignV::Top)
-          .set_wrap_mode(view::LabelView::WrapMode::Char)
+  // Prompt prefix "> " drawn as a label; the editable field follows it.
+  const core::coord_t prompt_w = 2;
+  auto prompt_label =
+      view::LabelView(U"> ")
+          .set_align(view::layout::AlignH::Left, view::layout::AlignV::Top)
           .set_cell(core::Cell::from_char(
               U' ', core::Style{}.fg(kFgBright).bg(kBgPanel)));
-  input_label.render(frame, input_content);
+  prompt_label.render(frame, input_content);
+
+  auto field_area = input_content;
+  field_area.origin.x = core::coord_t(field_area.origin.x + prompt_w);
+  field_area.size.w   = core::coord_t(field_area.size.w - prompt_w);
+
+  // Hide the caret while the assistant is streaming.
+  input_field.set_show_cursor(!stream.active);
+  input_field.render(frame, field_area);
 
   // -- Status bar --
   view::FillView status_bg(
@@ -348,8 +348,12 @@ int main() {
        false});
 
   StreamState    stream;
-  std::u32string input_buf;
-  core::coord_t  cursor_pos = 0;
+  view::TextInputView input_field;
+  input_field.set_cell(core::Cell::from_char(
+      U' ', core::Style{}.fg(kFgBright).bg(kBgPanel)));
+  input_field.set_placeholder(U"Type a message...");
+  input_field.set_placeholder_cell(core::Cell::from_char(
+      U' ', core::Style{}.fg(kFgNormal).bg(kBgPanel).dim()));
   int            response_idx = 0;
   int            spinner_phase = 0;
   bool           should_quit = false;
@@ -387,55 +391,20 @@ int main() {
 
         if (stream.active) continue;
 
-        if (key.code == core::KeyCode::Enter && !input_buf.empty()) {
-          messages.push_back({Message::User, input_buf, false});
+        if (key.code == core::KeyCode::Enter && !input_field.empty()) {
+          messages.push_back({Message::User, input_field.text(), false});
           const auto &resp =
               kResponses[response_idx % 4];
           ++response_idx;
           messages.push_back({Message::Assistant, U"", true});
           stream.start(resp);
-          input_buf.clear();
-          cursor_pos = 0;
+          input_field.clear();
           needs_render = true;
           continue;
         }
 
-        if (key.code == core::KeyCode::Backspace) {
-          if (cursor_pos > 0 &&
-              !input_buf.empty()) {
-            input_buf.erase(
-                static_cast<std::size_t>(cursor_pos - 1), 1);
-            --cursor_pos;
-            needs_render = true;
-          }
-          continue;
-        }
-
-        if (key.code == core::KeyCode::Left) {
-          if (cursor_pos > 0) { --cursor_pos; needs_render = true; }
-          continue;
-        }
-        if (key.code == core::KeyCode::Right) {
-          if (static_cast<std::size_t>(cursor_pos) <
-              input_buf.size()) { ++cursor_pos; needs_render = true; }
-          continue;
-        }
-        if (key.code == core::KeyCode::Home) {
-          cursor_pos = 0;
-          needs_render = true;
-          continue;
-        }
-        if (key.code == core::KeyCode::End) {
-          cursor_pos =
-              static_cast<core::coord_t>(input_buf.size());
-          needs_render = true;
-          continue;
-        }
-
-        if (key.code == core::KeyCode::Char && key.ch >= U' ') {
-          input_buf.insert(
-              static_cast<std::size_t>(cursor_pos), 1, key.ch);
-          ++cursor_pos;
+        // Delegate editing (insert / delete / caret motion) to the field.
+        if (input_field.handle_key(key)) {
           needs_render = true;
         }
       }
@@ -463,8 +432,7 @@ int main() {
     // Render only when state changed.
     if (needs_render) {
       view::Frame frame{size};
-      render_ui(frame, messages, stream, spinner_phase,
-                input_buf, cursor_pos);
+      render_ui(frame, messages, stream, spinner_phase, input_field);
       app.render(frame);
       needs_render = false;
     }
