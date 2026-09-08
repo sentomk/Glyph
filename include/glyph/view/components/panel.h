@@ -19,6 +19,74 @@
 namespace glyph::view {
 
   // ------------------------------------------------------------
+  // BorderStyle: per-position border cells
+  // ------------------------------------------------------------
+  struct BorderStyle final {
+    core::Cell top_left{};
+    core::Cell top_right{};
+    core::Cell bottom_left{};
+    core::Cell bottom_right{};
+    core::Cell horizontal{};
+    core::Cell vertical{};
+
+    // Uniform border from one cell (the historical single-cell border).
+    static BorderStyle uniform(core::Cell c) {
+      BorderStyle s{};
+      s.top_left = s.top_right = s.bottom_left = s.bottom_right = c;
+      s.horizontal = s.vertical = c;
+      return s;
+    }
+
+    // ╭─╮ │ ╰─╯
+    static BorderStyle rounded(core::Style style = {}) {
+      BorderStyle s{};
+      s.top_left     = core::Cell(U'╭', style);
+      s.top_right    = core::Cell(U'╮', style);
+      s.bottom_left  = core::Cell(U'╰', style);
+      s.bottom_right = core::Cell(U'╯', style);
+      s.horizontal   = core::Cell(U'─', style);
+      s.vertical     = core::Cell(U'│', style);
+      return s;
+    }
+
+    // ┌─┐ │ └─┘
+    static BorderStyle square(core::Style style = {}) {
+      BorderStyle s{};
+      s.top_left     = core::Cell(U'┌', style);
+      s.top_right    = core::Cell(U'┐', style);
+      s.bottom_left  = core::Cell(U'└', style);
+      s.bottom_right = core::Cell(U'┘', style);
+      s.horizontal   = core::Cell(U'─', style);
+      s.vertical     = core::Cell(U'│', style);
+      return s;
+    }
+
+    // ╔═╗ ║ ╚═╝
+    static BorderStyle double_line(core::Style style = {}) {
+      BorderStyle s{};
+      s.top_left     = core::Cell(U'╔', style);
+      s.top_right    = core::Cell(U'╗', style);
+      s.bottom_left  = core::Cell(U'╚', style);
+      s.bottom_right = core::Cell(U'╝', style);
+      s.horizontal   = core::Cell(U'═', style);
+      s.vertical     = core::Cell(U'║', style);
+      return s;
+    }
+
+    // Re-style every cell (keeps the glyph shapes, replaces colors/attrs).
+    BorderStyle with_style(core::Style style) const {
+      BorderStyle s  = *this;
+      s.top_left.style     = style;
+      s.top_right.style    = style;
+      s.bottom_left.style  = style;
+      s.bottom_right.style = style;
+      s.horizontal.style   = style;
+      s.vertical.style     = style;
+      return s;
+    }
+  };
+
+  // ------------------------------------------------------------
   // PanelStyle
   // ------------------------------------------------------------
   struct PanelStyle final {
@@ -105,10 +173,16 @@ namespace glyph::view {
       draw_fill_ = true;
     }
 
-    // Enable border and set the border cell.
+    // Enable border with a uniform single-cell border.
     void set_border(core::Cell cell) {
-      border_cell_ = cell;
-      draw_border_ = true;
+      border_style_ = BorderStyle::uniform(cell);
+      draw_border_  = true;
+    }
+
+    // Enable border with per-position cells (corners + edges).
+    void set_border_style(const BorderStyle &style) {
+      border_style_ = style;
+      draw_border_  = true;
     }
 
     // Set padding (inset) applied to the child area.
@@ -119,7 +193,7 @@ namespace glyph::view {
     // Apply a reusable style preset.
     void set_style(const PanelStyle &style) {
       fill_cell_   = style.fill_cell;
-      border_cell_ = style.border_cell;
+      border_style_ = BorderStyle::uniform(style.border_cell);
       padding_     = style.padding;
       draw_fill_   = style.draw_fill;
       draw_border_ = style.draw_border;
@@ -174,7 +248,8 @@ namespace glyph::view {
       return insets;
     }
 
-    // Draw a simple single-cell border on all sides.
+    // Draw the border: edges between corners, then corners (so corners
+    // win on degenerate 1x1 / 1xN / Nx1 areas).
     void draw_border(Frame &f, core::Rect area) const {
       const core::coord_t x0 = area.left();
       const core::coord_t y0 = area.top();
@@ -185,21 +260,27 @@ namespace glyph::view {
         return;
       }
 
-      for (core::coord_t x = x0; x <= x1; ++x) {
-        f.set(core::Point{x, y0}, border_cell_);
-        f.set(core::Point{x, y1}, border_cell_);
+      for (core::coord_t x = x0 + 1; x < x1; ++x) {
+        f.set(core::Point{x, y0}, border_style_.horizontal);
+        f.set(core::Point{x, y1}, border_style_.horizontal);
       }
 
-      for (core::coord_t y = y0; y <= y1; ++y) {
-        f.set(core::Point{x0, y}, border_cell_);
-        f.set(core::Point{x1, y}, border_cell_);
+      for (core::coord_t y = y0 + 1; y < y1; ++y) {
+        f.set(core::Point{x0, y}, border_style_.vertical);
+        f.set(core::Point{x1, y}, border_style_.vertical);
       }
+
+      f.set(core::Point{x0, y0}, border_style_.top_left);
+      f.set(core::Point{x1, y0}, border_style_.top_right);
+      f.set(core::Point{x0, y1}, border_style_.bottom_left);
+      f.set(core::Point{x1, y1}, border_style_.bottom_right);
     }
 
     const View    *child_ = nullptr;
     layout::Insets padding_{};
     core::Cell     fill_cell_{core::Cell::from_char(U' ')};
-    core::Cell     border_cell_{core::Cell::from_char(U'#')};
+    BorderStyle    border_style_{BorderStyle::uniform(
+        core::Cell::from_char(U'#'))};
     bool           draw_fill_   = false;
     bool           draw_border_ = false;
   };

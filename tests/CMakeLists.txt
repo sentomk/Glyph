@@ -45,6 +45,7 @@ endfunction()
 
 glyph_add_test(test_geometry       unit/test_geometry.cpp)
 glyph_add_test(test_cell_width     unit/test_cell_width.cpp)
+glyph_add_test(test_panel          unit/test_panel.cpp)
 if(GLYPH_USE_TEXERE)
   glyph_add_test(test_text_segment unit/test_text_segment.cpp)
 endif()
