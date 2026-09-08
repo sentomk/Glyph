@@ -18,6 +18,47 @@
 namespace glyph::view {
 
   // ------------------------------------------------------------
+  // Display width of UTF-8 text in columns (grapheme-aware).
+  // ------------------------------------------------------------
+  inline core::coord_t text_width(std::string_view text) noexcept {
+    core::coord_t w     = 0;
+    std::size_t   pos   = 0;
+    while (pos < text.size()) {
+      const core::Grapheme g = core::next_grapheme(text, pos);
+      pos = g.next;
+      w   = core::coord_t(w + g.width);
+    }
+    return w;
+  }
+
+  // ------------------------------------------------------------
+  // Longest prefix of UTF-8 text that fits within max_columns.
+  // Wide glyphs are never split; trailing zero-width clusters are
+  // dropped. Returns the whole string when it already fits.
+  // ------------------------------------------------------------
+  inline std::string_view clip_to_width(std::string_view text,
+                                        core::coord_t    max_columns) noexcept {
+    if (max_columns <= 0) {
+      return std::string_view{};
+    }
+    core::coord_t w     = 0;
+    std::size_t   pos   = 0;
+    std::size_t   limit = 0;
+    while (pos < text.size()) {
+      const core::Grapheme g = core::next_grapheme(text, pos);
+      if (g.width > 0) {
+        if (w + g.width > max_columns) {
+          break;
+        }
+        w = core::coord_t(w + g.width);
+      }
+      pos   = g.next;
+      limit = g.next;
+    }
+    return text.substr(0, limit);
+  }
+
+  // ------------------------------------------------------------
   // Draw UTF-8 text starting at p. Stops at frame width.
   // Grapheme-cluster aware: zero-width members (ZWJ, variation selectors,
   // combining marks, skin tones) never occupy a cell; multi-codepoint

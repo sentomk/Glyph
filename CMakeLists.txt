@@ -107,6 +107,8 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/view/components/stack.h
   include/glyph/view/components/table.h
   include/glyph/view/components/text_input.h
+  include/glyph/view/components/scroll_region.h
+  include/glyph/view/components/status_line.h
   # view/layout
   include/glyph/view/layout/align.h
   include/glyph/view/layout/box.h
