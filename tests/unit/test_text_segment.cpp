@@ -3,6 +3,10 @@
 
 #include <doctest/doctest.h>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "glyph/core/text.h"
 #include "glyph/view/frame.h"
 #include "glyph/view/text.h"
