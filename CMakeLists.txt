@@ -19,6 +19,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # MSVC, which otherwise assumes the system codepage.
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 
+# ------------------------------------------------------------
+# Grapheme segmentation backend
+# ------------------------------------------------------------
+# texere provides UAX #29 segmentation (and UAX #11 / UTS #51 width) with
+# the heavy unicode backends compiled behind its own library boundary.
+# It is a PRIVATE dependency: core headers never include texere types.
+option(GLYPH_USE_TEXERE "Use texere for UAX #29 grapheme segmentation" ON)
+
+if(GLYPH_USE_TEXERE)
+  include(FetchContent)
+  set(TEXERE_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
+  set(TEXERE_BUILD_TOOLS      OFF CACHE BOOL "" FORCE)
+  set(TEXERE_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(texere
+    GIT_REPOSITORY https://github.com/sentomk/texere.git
+    GIT_TAG        ecfc6cab1e004dc0391a9763c20be969705edcf9
+  )
+  FetchContent_MakeAvailable(texere)
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(GLYPH_BUILD_TESTS "Build Glyph tests" ON)
@@ -114,10 +134,20 @@ add_library(glyph
   src/render/ansi/ansi_renderer.cpp
   src/input/vt_decoder.cpp
   src/input/make_input.cpp
+  src/text_segment.cpp
   ${GLYPH_INPUT_BACKEND}
 )
 
 add_library(glyph::glyph ALIAS glyph)
+
+if(GLYPH_USE_TEXERE)
+  # $<BUILD_INTERFACE:> keeps texere out of the install(EXPORT) interface
+  # (it is not in any export set). The installed static library still
+  # carries texere symbols; wiring the package-level dependency is deferred
+  # until texere ships find_package support.
+  target_link_libraries(glyph PRIVATE $<BUILD_INTERFACE:texere::texere>)
+  target_compile_definitions(glyph PRIVATE GLYPH_USE_TEXERE=1)
+endif()
 
 # language/features
 target_compile_features(glyph PUBLIC cxx_std_20)

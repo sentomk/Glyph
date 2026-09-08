@@ -18,20 +18,32 @@
 namespace glyph::view {
 
   // ------------------------------------------------------------
-  // Draw ASCII text starting at p. Stops at frame width.
+  // Draw UTF-8 text starting at p. Stops at frame width.
+  // Grapheme-cluster aware: zero-width members (ZWJ, variation selectors,
+  // combining marks, skin tones) never occupy a cell; multi-codepoint
+  // clusters are stored as their base glyph.
   // ------------------------------------------------------------
   inline void draw_text(Frame &f, core::Point p, std::string_view text,
                         core::Cell cell = core::Cell::from_char(U' ')) {
-    core::coord_t x = p.x;
-    for (char ch : text) {
+    core::coord_t x   = p.x;
+    std::size_t   pos = 0;
+    while (pos < text.size()) {
       if (x >= f.size().w) {
         break;
       }
+      const core::Grapheme g = core::next_grapheme(text, pos);
+      pos = g.next;
+      if (g.width == 0) {
+        continue;
+      }
+      if (x + g.width > f.size().w) {
+        break;
+      }
       core::Cell c = cell;
-      c.ch         = static_cast<char32_t>(ch);
-      c.width      = core::cell_width(c.ch);
+      c.ch         = g.base;
+      c.width      = g.width;
       f.set(core::Point{x, p.y}, c);
-      x = core::coord_t(x + 1);
+      x = core::coord_t(x + g.width);
     }
   }
 
@@ -61,20 +73,30 @@ namespace glyph::view {
   }
 
   // ------------------------------------------------------------
-  // Draw ASCII text into a Canvas starting at p.
+  // Draw UTF-8 text into a Canvas starting at p. Cluster-aware, same
+  // semantics as the Frame overload above.
   // ------------------------------------------------------------
   inline void draw_text(Canvas &c, core::Point p, std::string_view text,
                         core::Cell cell = core::Cell::from_char(U' ')) {
-    core::coord_t x = p.x;
-    for (char ch : text) {
+    core::coord_t x   = p.x;
+    std::size_t   pos = 0;
+    while (pos < text.size()) {
       if (x >= c.size().w) {
         break;
       }
+      const core::Grapheme g = core::next_grapheme(text, pos);
+      pos = g.next;
+      if (g.width == 0) {
+        continue;
+      }
+      if (x + g.width > c.size().w) {
+        break;
+      }
       core::Cell out = cell;
-      out.ch         = static_cast<char32_t>(ch);
-      out.width      = core::cell_width(out.ch);
+      out.ch         = g.base;
+      out.width      = g.width;
       c.set(core::Point{x, p.y}, out);
-      x = core::coord_t(x + 1);
+      x = core::coord_t(x + g.width);
     }
   }
 

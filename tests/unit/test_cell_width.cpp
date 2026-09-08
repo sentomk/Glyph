@@ -47,7 +47,24 @@ TEST_CASE("cell_width: standalone emoji are wide") {
   CHECK(cell_width(U'\U0001F44D') == 2); // thumbs up 👍
   CHECK(cell_width(U'\U0001F680') == 2); // rocket 🚀
   CHECK(cell_width(U'\U0001F9FF') == 2); // nazar amulet (end of ext range)
-  CHECK(cell_width(U'\U0001F1E8') == 2); // regional indicator C (flag half)
+  CHECK(cell_width(0x1F3FA) == 2);       // last non-modifier pictograph
+}
+
+TEST_CASE("cell_width: zero-width combining and format codepoints") {
+  CHECK(cell_width(0x0301) == 0);  // combining acute accent
+  CHECK(cell_width(0x200D) == 0);  // zero-width joiner
+  CHECK(cell_width(0x200B) == 0);  // zero-width space
+  CHECK(cell_width(0xFE0F) == 0);  // variation selector-16 (emoji)
+  CHECK(cell_width(0xFE0E) == 0);  // variation selector-15 (text)
+  CHECK(cell_width(0x1F3FD) == 0); // skin-tone modifier
+  CHECK(cell_width(0xFEFF) == 0);  // BOM
+}
+
+TEST_CASE("cell_width: lone regional indicators are narrow") {
+  // A lone indicator renders as a narrow letter; a pair becomes one
+  // two-cell flag, which is a grapheme-level concern (next_grapheme).
+  CHECK(cell_width(0x1F1E8) == 1);
+  CHECK(cell_width(0x1F1EF) == 1);
 }
 
 TEST_CASE("cell_width: emoji range boundaries") {
