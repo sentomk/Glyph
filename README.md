@@ -18,7 +18,7 @@ View → Frame (semantic draw) → Renderer (backend output)
 - **view/layout/**: pure layout helpers (box/stack/inset/align/split/scroll)
 - **view/components/**: Label/Panel/Bar/Table/Focus
 - **render/**: backend output (ANSI / Debug)
-- **input/**: unified event model + Windows input backend
+- **input/**: unified event model + pluggable platform backends (Windows / POSIX)
 
 Layering rule: upper layers do not depend on lower-level details; backends are replaceable.
 
@@ -26,11 +26,11 @@ Layering rule: upper layers do not depend on lower-level details; backends are r
 - Semantic 2D canvas and minimal draw pipeline
 - `Cell` width policy + write-time dirty marking
 - ANSI renderer (diff/dirty optimized, true-color styles)
-- Windows input (VT key sequences + mouse wheel)
+- Cross-platform input (Windows + POSIX: shared VT decoder, key/mouse/paste events)
 - Layout helpers: box/stack/inset/align/split + scroll model
-- Components: LabelView, PanelView, BarView, TableView
+- Components: LabelView, PanelView, BarView, TableView, TextInputView
 - Focus/selection models for list/table style components
-- Demos: aurora_dashboard, components_demo, bar_demo, poll_stress_demo, snake_demo
+- Demos: aurora_dashboard, agent_chat, components_demo, bar_demo, poll_stress_demo, snake_demo
 
 ## Example
 Build & run:
@@ -76,9 +76,9 @@ include/glyph/
   core/    core types, geometry, Cell, Buffer, diff
   view/    View/Frame/Canvas
   view/layout/  box/stack/inset/align/split/scroll
-  view/components/  Label/Panel/Bar/Table/Focus
+  view/components/  Label/Panel/Bar/Table/TextInput/Focus
   render/  Renderer/ANSI/Debug
-  input/   Event/Input/WinInput
+  input/   Event/Input/WinInput/PosixInput
 src/
 samples/
 ```
@@ -89,16 +89,14 @@ samples/
 - **Lightweight core**: keep core types small and stable
 
 ## Known Limitations (current)
-- Windows input only (no Unix/macOS backend yet)
 - TableView is basic (no virtualization or column resizing)
 - No chart/graph components yet
-- No text input component yet
+- TextInputView is single-line only
 
 ## Roadmap
 - Charts (line chart, progress bar)
 - System stats (CPU/memory/process list)
 - Glyph-Top demo (table + charts + status)
-- Cross-platform input (Unix/macOS)
 
 ## Dev Guide (quick)
 ### Add a renderer backend
