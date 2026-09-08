@@ -67,6 +67,33 @@ namespace glyph::render {
   };
 
   // ------------------------------------------------------------
+  // FullScreenGuard
+  // ------------------------------------------------------------
+  // Full-screen mode for interactive TUI apps: alternate screen buffer,
+  // hidden cursor, disabled autowrap, and saved terminal attributes.
+  // Everything is restored on scope exit — including when the process is
+  // interrupted (SIGINT/SIGTERM on POSIX, Ctrl handlers on Windows): the
+  // guard reinstalls the previous handlers after restoring.
+  //
+  // One guard may be active per process.
+  class FullScreenGuard final {
+  public:
+    FullScreenGuard(); // writes to std::cout
+    explicit FullScreenGuard(std::ostream &out);
+
+    ~FullScreenGuard();
+
+    FullScreenGuard(const FullScreenGuard &)            = delete;
+    FullScreenGuard &operator=(const FullScreenGuard &) = delete;
+
+  private:
+    void enter();
+    void leave() noexcept;
+
+    std::ostream &out_;
+  };
+
+  // ------------------------------------------------------------
   // TerminalApp
   // ------------------------------------------------------------
   // Convenience wrapper that owns a session + ANSI renderer.
