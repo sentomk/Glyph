@@ -14,6 +14,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Sources and tests embed UTF-8 literals (CJK/emoji/box-drawing), and the
+# library treats char data as UTF-8 at runtime. Declare both charsets for
+# MSVC, which otherwise assumes the system codepage.
+add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(GLYPH_BUILD_TESTS "Build Glyph tests" ON)
