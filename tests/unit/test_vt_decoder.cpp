@@ -54,6 +54,70 @@ TEST_CASE("C0 control bytes map to named keys (POSIX path)") {
         KeyCode::Backspace);
 }
 
+TEST_CASE("remaining C0 bytes decode as Ctrl combos") {
+  const auto ctrl = [](char32_t byte) {
+    auto ev = decode(std::u32string(1, byte));
+    REQUIRE(ev.size() == 1);
+    return as_key(ev[0]);
+  };
+  CHECK(ctrl(0x01).ch == U'a');
+  CHECK(has_mod(ctrl(0x01).mods, Mod::Ctrl));
+  CHECK(ctrl(0x11).ch == U'q'); // XON, arrives raw with IXON off
+  CHECK(ctrl(0x1A).ch == U'z');
+  CHECK(ctrl(0x00).ch == U' '); // Ctrl+@ / Ctrl+Space
+  CHECK(ctrl(0x1F).ch == U'_');
+  CHECK(ctrl(0x1C).ch == U'\\');
+}
+
+TEST_CASE("ESC followed by a key is Alt+key, not Esc + key") {
+  auto ev = decode(U"\x1bx");
+  REQUIRE(ev.size() == 1);
+  CHECK(as_key(ev[0]).code == KeyCode::Char);
+  CHECK(as_key(ev[0]).ch == U'x');
+  CHECK(has_mod(as_key(ev[0]).mods, Mod::Alt));
+  CHECK_FALSE(has_mod(as_key(ev[0]).mods, Mod::Ctrl));
+}
+
+TEST_CASE("ESC composes onto named keys and Ctrl bytes") {
+  auto enter = decode(U"\x1b\r");
+  REQUIRE(enter.size() == 1);
+  CHECK(as_key(enter[0]).code == KeyCode::Enter);
+  CHECK(has_mod(as_key(enter[0]).mods, Mod::Alt));
+
+  auto cax = decode(std::u32string(U"\x1b") + std::u32string(1, 0x01));
+  REQUIRE(cax.size() == 1);
+  CHECK(as_key(cax[0]).ch == U'a');
+  CHECK(has_mod(as_key(cax[0]).mods, Mod::Alt));
+  CHECK(has_mod(as_key(cax[0]).mods, Mod::Ctrl));
+}
+
+TEST_CASE("CSI letter keys honor modifier parameters") {
+  // 1;5 = Ctrl, 1;2 = Shift, 1;3 = Alt+Shift
+  auto cr = decode(U"\x1b[1;5C");
+  REQUIRE(cr.size() == 1);
+  CHECK(as_key(cr[0]).code == KeyCode::Right);
+  CHECK(has_mod(as_key(cr[0]).mods, Mod::Ctrl));
+
+  auto su = decode(U"\x1b[1;2A");
+  CHECK(as_key(su[0]).code == KeyCode::Up);
+  CHECK(has_mod(as_key(su[0]).mods, Mod::Shift));
+
+  auto plain = decode(U"\x1b[C");
+  CHECK_FALSE(has_mod(as_key(plain[0]).mods, Mod::Ctrl));
+}
+
+TEST_CASE("CSI tilde keys honor modifier parameters") {
+  // 3;5~ = Ctrl+Delete
+  auto cd = decode(U"\x1b[3;5~");
+  REQUIRE(cd.size() == 1);
+  CHECK(as_key(cd[0]).code == KeyCode::Delete);
+  CHECK(has_mod(as_key(cd[0]).mods, Mod::Ctrl));
+
+  auto plain = decode(U"\x1b[3~");
+  CHECK(as_key(plain[0]).code == KeyCode::Delete);
+  CHECK(as_key(plain[0]).mods == Mod::None);
+}
+
 TEST_CASE("regression: text followed by CR sends Enter") {
   // This is the agent_chat bug: 'hi' + Enter must yield Char,Char,Enter.
   auto ev = decode(U"hi\r");

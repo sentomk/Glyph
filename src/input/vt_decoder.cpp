@@ -5,9 +5,60 @@
 #include "glyph/input/detail/vt_decoder.h"
 
 #include <algorithm>
-#include <cctype>
 
 namespace glyph::input::detail {
+
+  namespace {
+
+    // Split a parameter run like "1;5" into up to two integer fields.
+    // Returns how many fields were present.
+    int parse_two(const std::u32string &p, int &a, int &b) {
+      a = 0;
+      b = 0;
+      int cur = 0;
+      int n   = 0;
+      for (char32_t c : p) {
+        if (c == U';') {
+          if (n == 0) {
+            a = cur;
+          } else if (n == 1) {
+            b = cur;
+          }
+          ++n;
+          cur = 0;
+        } else {
+          cur = cur * 10 + int(c - U'0');
+        }
+      }
+      if (n == 0) {
+        a = cur;
+        return 1;
+      }
+      if (n == 1) {
+        b = cur;
+        return 2;
+      }
+      return n;
+    }
+
+    // VT modifier parameter: 1 + (shift 1 | alt 2 | ctrl 4), so 5 =
+    // Ctrl, 2 = Shift, 3 = Ctrl+Alt, ... 1 (or absent) = none.
+    core::Mod vt_mods(int v) noexcept {
+      if (v <= 1) {
+        return core::Mod::None;
+      }
+      core::Mod m = core::Mod::None;
+      const int bits = v - 1;
+      if (bits & 1)
+        m = m | core::Mod::Shift;
+      if (bits & 2)
+        m = m | core::Mod::Alt;
+      if (bits & 4)
+        m = m | core::Mod::Ctrl;
+      return m;
+    }
+
+  } // namespace
 
   void VtDecoder::emit_char(char32_t ch, core::Mod mods) {
     core::KeyEvent ev{};
@@ -52,8 +103,7 @@ namespace glyph::input::detail {
 
     // C0 control bytes that map to named keys. WinInput intercepts these
     // before feeding us, so this path is exercised by the POSIX backend
-    // (and any raw byte stream). Other C0 codes (Ctrl+letter) fall through
-    // as Char so modifier combos still reach the app.
+    // (and any raw byte stream).
     switch (ch) {
     case U'\r': // CR
     case U'\n': // LF
@@ -70,12 +120,30 @@ namespace glyph::input::detail {
       break;
     }
 
+    // Remaining C0 bytes are Ctrl combos: 0x01..0x1A arrive as
+    // Ctrl+'a'..Ctrl+'z' in raw mode, and 0x1C..0x1F as Ctrl+\ ] ^ _.
+    // Terminals cannot distinguish Ctrl+letter from the bare byte, so
+    // apps see the letter plus Mod::Ctrl instead of a control codepoint.
+    if (ch < 0x20) {
+      char32_t base = 0;
+      switch (ch) {
+      case 0x00: base = U' '; break; // Ctrl+@ / Ctrl+Space
+      case 0x1C: base = U'\\'; break;
+      case 0x1D: base = U']'; break;
+      case 0x1E: base = U'^'; break;
+      case 0x1F: base = U'_'; break;
+      default:   base = char32_t(U'a' + (ch - 1)); break;
+      }
+      emit_char(base, mods | core::Mod::Ctrl);
+      return;
+    }
+
     emit_char(ch, mods);
   }
 
   void VtDecoder::step_esc(char32_t ch, core::Mod mods) {
     if (ch == U'[') {
-      state_ = State::Csi;
+      state_    = State::Csi;
       params_.clear();
       return;
     }
@@ -83,10 +151,13 @@ namespace glyph::input::detail {
       state_ = State::Ss3;
       return;
     }
-    // Not an introducer: the ESC was standalone, then reprocess ch.
-    emit_key(core::KeyCode::Esc, esc_mods_);
+    // Not an introducer: ESC followed by another key in the same burst
+    // is how terminals encode Alt+key. A genuinely lone Esc is resolved
+    // by flush() when nothing follows, so this branch means both bytes
+    // arrived together. Routing through handle_ground also composes the
+    // alt-mod onto named keys (Alt+Enter) and C0 bytes (Alt+Ctrl+x).
     state_ = State::Ground;
-    handle_ground(ch, mods);
+    handle_ground(ch, esc_mods_ | core::Mod::Alt);
   }
 
   void VtDecoder::step_ss3(char32_t ch) {
@@ -172,33 +243,32 @@ namespace glyph::input::detail {
   }
 
   void VtDecoder::finish_csi_tilde() {
-    int param = 0;
-    for (char32_t ch : params_) {
-      if (!std::isdigit(static_cast<unsigned char>(ch)))
-        break;
-      param = param * 10 + int(ch - U'0');
-    }
-    switch (param) {
+    int key_param = 0;
+    int mod_param = 0;
+    const int fields = parse_two(params_, key_param, mod_param);
+    const core::Mod mods =
+        fields > 1 ? vt_mods(mod_param) : core::Mod::None;
+    switch (key_param) {
     case 1:
-    case 7: emit_key(core::KeyCode::Home, core::Mod::None); break;
-    case 2: emit_key(core::KeyCode::Insert, core::Mod::None); break;
-    case 3: emit_key(core::KeyCode::Delete, core::Mod::None); break;
+    case 7: emit_key(core::KeyCode::Home, mods); break;
+    case 2: emit_key(core::KeyCode::Insert, mods); break;
+    case 3: emit_key(core::KeyCode::Delete, mods); break;
     case 4:
-    case 8: emit_key(core::KeyCode::End, core::Mod::None); break;
-    case 5: emit_key(core::KeyCode::PageUp, core::Mod::None); break;
-    case 6: emit_key(core::KeyCode::PageDown, core::Mod::None); break;
-    case 11: emit_key(core::KeyCode::F1, core::Mod::None); break;
-    case 12: emit_key(core::KeyCode::F2, core::Mod::None); break;
-    case 13: emit_key(core::KeyCode::F3, core::Mod::None); break;
-    case 14: emit_key(core::KeyCode::F4, core::Mod::None); break;
-    case 15: emit_key(core::KeyCode::F5, core::Mod::None); break;
-    case 17: emit_key(core::KeyCode::F6, core::Mod::None); break;
-    case 18: emit_key(core::KeyCode::F7, core::Mod::None); break;
-    case 19: emit_key(core::KeyCode::F8, core::Mod::None); break;
-    case 20: emit_key(core::KeyCode::F9, core::Mod::None); break;
-    case 21: emit_key(core::KeyCode::F10, core::Mod::None); break;
-    case 23: emit_key(core::KeyCode::F11, core::Mod::None); break;
-    case 24: emit_key(core::KeyCode::F12, core::Mod::None); break;
+    case 8: emit_key(core::KeyCode::End, mods); break;
+    case 5: emit_key(core::KeyCode::PageUp, mods); break;
+    case 6: emit_key(core::KeyCode::PageDown, mods); break;
+    case 11: emit_key(core::KeyCode::F1, mods); break;
+    case 12: emit_key(core::KeyCode::F2, mods); break;
+    case 13: emit_key(core::KeyCode::F3, mods); break;
+    case 14: emit_key(core::KeyCode::F4, mods); break;
+    case 15: emit_key(core::KeyCode::F5, mods); break;
+    case 17: emit_key(core::KeyCode::F6, mods); break;
+    case 18: emit_key(core::KeyCode::F7, mods); break;
+    case 19: emit_key(core::KeyCode::F8, mods); break;
+    case 20: emit_key(core::KeyCode::F9, mods); break;
+    case 21: emit_key(core::KeyCode::F10, mods); break;
+    case 23: emit_key(core::KeyCode::F11, mods); break;
+    case 24: emit_key(core::KeyCode::F12, mods); break;
     default: break;
     }
   }
@@ -264,17 +334,24 @@ namespace glyph::input::detail {
       return;
     }
 
+    // Modifier parameter before the final letter ("1;5C" = Ctrl+Right);
+    // the key id field itself is ignored for letter-terminated keys.
+    int       key_id   = 0;
+    int       mod_param = 0;
+    const int fields   = parse_two(params_, key_id, mod_param);
+    core::Mod mods     = fields > 1 ? vt_mods(mod_param) : core::Mod::None;
+
     switch (ch) {
-    case U'A': emit_key(core::KeyCode::Up, core::Mod::None); break;
-    case U'B': emit_key(core::KeyCode::Down, core::Mod::None); break;
-    case U'C': emit_key(core::KeyCode::Right, core::Mod::None); break;
-    case U'D': emit_key(core::KeyCode::Left, core::Mod::None); break;
-    case U'H': emit_key(core::KeyCode::Home, core::Mod::None); break;
-    case U'F': emit_key(core::KeyCode::End, core::Mod::None); break;
-    case U'P': emit_key(core::KeyCode::F1, core::Mod::None); break;
-    case U'Q': emit_key(core::KeyCode::F2, core::Mod::None); break;
-    case U'R': emit_key(core::KeyCode::F3, core::Mod::None); break;
-    case U'S': emit_key(core::KeyCode::F4, core::Mod::None); break;
+    case U'A': emit_key(core::KeyCode::Up, mods); break;
+    case U'B': emit_key(core::KeyCode::Down, mods); break;
+    case U'C': emit_key(core::KeyCode::Right, mods); break;
+    case U'D': emit_key(core::KeyCode::Left, mods); break;
+    case U'H': emit_key(core::KeyCode::Home, mods); break;
+    case U'F': emit_key(core::KeyCode::End, mods); break;
+    case U'P': emit_key(core::KeyCode::F1, mods); break;
+    case U'Q': emit_key(core::KeyCode::F2, mods); break;
+    case U'R': emit_key(core::KeyCode::F3, mods); break;
+    case U'S': emit_key(core::KeyCode::F4, mods); break;
     default: break;
     }
 

@@ -189,6 +189,13 @@ namespace glyph::view {
       using core::KeyCode;
       switch (key.code) {
       case KeyCode::Char:
+        // Modifier combos are app shortcuts, not text: the decoder now
+        // reports Ctrl+x / Alt+x as the letter plus mods, so they must
+        // not land in the buffer.
+        if (core::has_mod(key.mods, core::Mod::Ctrl) ||
+            core::has_mod(key.mods, core::Mod::Alt)) {
+          return false;
+        }
         return insert(key.ch);
       case KeyCode::Backspace:
         return backspace();

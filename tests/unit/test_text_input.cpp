@@ -53,6 +53,23 @@ TEST_CASE("control characters are not inserted as text") {
   CHECK(in.text().empty());
 }
 
+TEST_CASE("modifier combos are not inserted as text") {
+  // The decoder reports Ctrl+x / Alt+x as the letter plus mods; those
+  // are app shortcuts and must not land in the buffer.
+  TextInputView in;
+  in.handle_key(ch_key(U'a'));
+
+  KeyEvent ctrl_a = ch_key(U'a');
+  ctrl_a.mods     = Mod::Ctrl;
+  CHECK_FALSE(in.handle_key(ctrl_a));
+
+  KeyEvent alt_b = ch_key(U'b');
+  alt_b.mods     = Mod::Alt;
+  CHECK_FALSE(in.handle_key(alt_b));
+
+  CHECK(in.text() == U"a");
+}
+
 TEST_CASE("backspace deletes before the caret") {
   TextInputView in{U"abc"};
   in.set_caret(3);
