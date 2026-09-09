@@ -8,6 +8,7 @@
 #include <csignal>
 #include <cstring>
 
+#include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
 
@@ -19,6 +20,71 @@ namespace glyph::input {
 
     void handle_sigwinch(int) {
       g_winch_flag.store(true, std::memory_order_relaxed);
+    }
+
+    // The destructor is the only restore path for raw mode, so a process
+    // killed by an out-of-band signal (SIGTERM, SIGHUP from a closing
+    // terminal, SIGQUIT) leaves the tty without echo. These file-scope
+    // copies exist because the plain-C fatal handlers cannot reach member
+    // state; one backend may be in raw mode at a time.
+    termios           g_restore_tio{};
+    std::atomic<bool> g_raw_active{false};
+    bool              g_fatal_installed = false;
+    struct sigaction  g_fatal_prev[4]   = {};
+
+    constexpr int k_fatal_signals[4] = {SIGINT, SIGTERM, SIGHUP, SIGQUIT};
+
+    // Handler context: tcsetattr/fcntl/raw ::write only, no iostreams.
+    // TCSANOW, not TCSAFLUSH: draining pending output in a dying process
+    // can block forever (e.g. a full pty buffer nobody reads anymore), and
+    // discarding the user's typed-ahead input on the way out helps no one.
+    // The escape write gets O_NONBLOCK for the same reason — a peer that
+    // stopped reading (dropped connection, no reader) must not wedge the
+    // restore; the sequences are best-effort.
+    void restore_tty_async() noexcept {
+      if (!g_raw_active.load(std::memory_order_relaxed)) {
+        return;
+      }
+      ::tcsetattr(STDIN_FILENO, TCSANOW, &g_restore_tio);
+
+      const int flags = ::fcntl(STDOUT_FILENO, F_GETFL);
+      if (flags >= 0) {
+        ::fcntl(STDOUT_FILENO, F_SETFL, flags | O_NONBLOCK);
+        const char seq[] = "\x1b[?1000l\x1b[?1006l\x1b[?2004l";
+        const auto  n = ::write(STDOUT_FILENO, seq, sizeof seq - 1);
+        (void)n;
+        ::fcntl(STDOUT_FILENO, F_SETFL, flags);
+      }
+    }
+
+    void handle_fatal(int sig) {
+      restore_tty_async();
+      ::signal(sig, SIG_DFL);
+      ::raise(sig);
+    }
+
+    void install_fatal_handlers() {
+      if (g_fatal_installed) {
+        return;
+      }
+      struct sigaction sa {};
+      sa.sa_handler = &handle_fatal;
+      sigemptyset(&sa.sa_mask);
+      sa.sa_flags = SA_RESTART;
+      for (int i = 0; i < 4; ++i) {
+        ::sigaction(k_fatal_signals[i], &sa, &g_fatal_prev[i]);
+      }
+      g_fatal_installed = true;
+    }
+
+    void uninstall_fatal_handlers() {
+      if (!g_fatal_installed) {
+        return;
+      }
+      for (int i = 0; i < 4; ++i) {
+        ::sigaction(k_fatal_signals[i], &g_fatal_prev[i], nullptr);
+      }
+      g_fatal_installed = false;
     }
   } // namespace
 
@@ -49,6 +115,10 @@ namespace glyph::input {
     }
     if (tty_ && raw_active_) {
       ::tcsetattr(fd_in_, TCSAFLUSH, &orig_termios_);
+    }
+    if (g_raw_active.load(std::memory_order_relaxed)) {
+      g_raw_active.store(false, std::memory_order_relaxed);
+      uninstall_fatal_handlers();
     }
 
     struct sigaction sa {};
@@ -102,10 +172,16 @@ namespace glyph::input {
         raw.c_cc[VTIME] = 0;
         ::tcsetattr(fd_in_, TCSAFLUSH, &raw);
         raw_active_ = true;
+
+        g_restore_tio = orig_termios_;
+        g_raw_active.store(true, std::memory_order_relaxed);
+        install_fatal_handlers();
       }
       else if (!want_raw && raw_active_) {
         ::tcsetattr(fd_in_, TCSAFLUSH, &orig_termios_);
         raw_active_ = false;
+        g_raw_active.store(false, std::memory_order_relaxed);
+        uninstall_fatal_handlers();
       }
     }
 
