@@ -10,6 +10,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 namespace glyph::input {
@@ -251,8 +252,17 @@ namespace glyph::input {
       return false;
     }
     core::ResizeEvent ev{};
-    // Size is reported lazily; callers typically re-query terminal size.
-    // We still surface the event so apps can trigger a relayout.
+    // Fill the new size here so consumers get one authoritative value
+    // instead of every app re-querying the render layer. WinInput's
+    // WINDOW_BUFFER_SIZE_EVENT carries the size natively; TIOCGWINSZ is
+    // the POSIX equivalent. On failure the event still fires with the
+    // default (0x0) size — apps treat that as "re-query yourself".
+    winsize ws{};
+    if (::ioctl(fd_out_, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 &&
+        ws.ws_row > 0) {
+      ev.size = core::Size{static_cast<core::coord_t>(ws.ws_col),
+                           static_cast<core::coord_t>(ws.ws_row)};
+    }
     out = ev;
     return true;
   }
