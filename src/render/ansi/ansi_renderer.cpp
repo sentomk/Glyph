@@ -86,6 +86,9 @@ namespace glyph::render {
     if (s.attrs & glyph::core::Style::AttrStrike) {
       out << ";9";
     }
+    if (s.attrs & glyph::core::Style::AttrReverse) {
+      out << ";7";
+    }
 
     if (s.fg_is_default()) {
       out << ";39";

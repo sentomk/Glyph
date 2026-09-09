@@ -25,6 +25,7 @@ namespace glyph::core {
       AttrUnderline = 1u << 3,
       AttrBlink     = 1u << 4,
       AttrStrike    = 1u << 5,
+      AttrReverse   = 1u << 6, // swap fg/bg at render time (SGR 7)
     };
 
     enum : std::uint16_t {
