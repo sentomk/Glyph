@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+#include <poll.h>
 
 #if defined(__APPLE__)
 #include <util.h>
@@ -53,14 +54,29 @@ TEST_CASE("raw mode is restored when the process dies by signal") {
     ::_exit(0); // unreachable when the handler re-raises
   }
 
+  // Drop our slave copy before reaping: while any slave fd is open, a
+  // Linux master read never sees EOF/EIO once the child is gone and
+  // blocks forever (macOS HUPs the pty when the session leader dies,
+  // which masks this). The termios checks below use the master fd.
+  ::close(slave);
+
   // Service the master side like a real terminal would while reaping:
   // the dying child's restore sequences must be drained or its exit
-  // wedges on the tty output queue. read() returns EIO once the child
-  // side has fully closed, which ends the loop.
+  // wedges on the tty output queue. poll()-bounded so the test cannot
+  // hang on any unexpected blocking.
   int status = 0;
   for (;;) {
-    char buf[256];
+    struct pollfd pfd {};
+    pfd.fd     = master;
+    pfd.events = POLLIN;
+    if (::poll(&pfd, 1, 2000) <= 0 ||
+        !(pfd.revents & (POLLIN | POLLHUP | POLLERR))) {
+      REQUIRE(::waitpid(pid, &status, 0) == pid);
+      break;
+    }
+    char          buf[256];
     const ssize_t n = ::read(master, buf, sizeof buf);
+    (void)n;
     if (::waitpid(pid, &status, WNOHANG) == pid) {
       break;
     }
@@ -79,7 +95,6 @@ TEST_CASE("raw mode is restored when the process dies by signal") {
   CHECK((after.c_oflag & OPOST) != 0);
 
   ::close(master);
-  ::close(slave);
 }
 
 #endif // !_WIN32
