@@ -84,6 +84,9 @@ GLYPH_JOIN_HEADERS(GLYPH_PUBLIC_HEADERS
   include/glyph/input/win32/win_input.h
   include/glyph/input/posix/posix_input.h
 
+  # platform/
+  include/glyph/platform/clipboard.h
+
   # render/
   include/glyph/render/render.h
   include/glyph/render/terminal.h
@@ -138,6 +141,7 @@ add_library(glyph
   src/input/vt_decoder.cpp
   src/input/make_input.cpp
   src/text_segment.cpp
+  src/platform/clipboard.cpp
   ${GLYPH_INPUT_BACKEND}
 )
 
