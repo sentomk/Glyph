@@ -26,11 +26,12 @@ Layering rule: upper layers do not depend on lower-level details; backends are r
 - Semantic 2D canvas and minimal draw pipeline
 - `Cell` width policy + write-time dirty marking
 - ANSI renderer (diff/dirty optimized, true-color styles)
-- Cross-platform input (Windows + POSIX: shared VT decoder, key/mouse/paste events)
+- Cross-platform input (Windows + POSIX: shared VT decoder, key/mouse/drag/paste events, Ctrl/Alt modifiers)
 - Layout helpers: box/stack/inset/align/split + scroll model
-- Components: LabelView, PanelView, BarView, TableView, TextInputView
+- Components: LabelView, PanelView (border-style presets), BarView, TableView, TextInputView
+- Selection model (drag select, reverse-video highlight, UTF-8 extract) + platform clipboard
 - Focus/selection models for list/table style components
-- Demos: aurora_dashboard, agent_chat, components_demo, bar_demo, poll_stress_demo, snake_demo
+- Demos: aurora_dashboard, agent_chat, selection_demo, components_demo, bar_demo, poll_stress_demo, snake_demo
 
 ## Example
 Build & run:

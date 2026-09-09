@@ -312,6 +312,14 @@ target_link_libraries(agent_chat
   PRIVATE glyph::glyph
 )
 
+# selection_demo
+add_executable(selection_demo
+  samples/ui/selection_demo.cpp
+)
+target_link_libraries(selection_demo
+  PRIVATE glyph::glyph
+)
+
 # ------------------------------------------------------------
 # Tests
 # ------------------------------------------------------------
