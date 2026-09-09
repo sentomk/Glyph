@@ -177,6 +177,24 @@ TEST_CASE("SGR mouse wheel") {
   CHECK(as_mouse(decode(U"\x1b[<64;1;1M")[0]).action == MouseAction::Scroll);
 }
 
+TEST_CASE("SGR mouse drag vs hover move") {
+  // 32 = motion bit. With a button held (0) it is a drag; button 3
+  // (none held) is a hover move, only reported under all-motion
+  // tracking (1003).
+  auto drag = decode(U"\x1b[<32;5;3M");
+  REQUIRE(drag.size() == 1);
+  CHECK(as_mouse(drag[0]).button == MouseButton::Left);
+  CHECK(as_mouse(drag[0]).action == MouseAction::Drag);
+
+  auto move = decode(U"\x1b[<35;5;3M");
+  REQUIRE(move.size() == 1);
+  CHECK(as_mouse(move[0]).action == MouseAction::Move);
+
+  auto right_drag = decode(U"\x1b[<34;1;1M");
+  CHECK(as_mouse(right_drag[0]).button == MouseButton::Right);
+  CHECK(as_mouse(right_drag[0]).action == MouseAction::Drag);
+}
+
 TEST_CASE("SGR mouse modifiers") {
   // base button 0 + shift(4) + ctrl(16) = 20
   auto        ev = decode(U"\x1b[<20;1;1M");

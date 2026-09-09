@@ -148,8 +148,10 @@ namespace glyph::input {
   }
 
   void PosixInput::apply_mouse(bool enable) {
-    // 1000 = button events, 1006 = SGR extended coordinates.
-    write_seq(enable ? "\x1b[?1000h\x1b[?1006h" : "\x1b[?1000l\x1b[?1006l");
+    // 1000 = button press/release, 1002 = button-event tracking (motion
+    // while a button is held -> drag), 1006 = SGR extended coordinates.
+    write_seq(enable ? "\x1b[?1000h\x1b[?1002h\x1b[?1006h"
+                     : "\x1b[?1000l\x1b[?1002l\x1b[?1006l");
     mouse_active_ = enable;
   }
 

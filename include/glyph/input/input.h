@@ -18,7 +18,7 @@ namespace glyph::input {
   enum class InputMode : std::uint8_t {
     None  = 0,
     Raw   = 1 << 0, // no line buffering, immediate key events.
-    Mouse = 1 << 1, // enable mouse events
+    Mouse = 1 << 1, // enable mouse events (press/release/drag/wheel)
     Paste = 1 << 2, // enable bracketed paste
   };
 

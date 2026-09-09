@@ -230,7 +230,15 @@ namespace glyph::input::detail {
           button = core::MouseButton::Right;
 
         if ((b & 32) != 0) {
-          emit_mouse(button, core::MouseAction::Drag, pos, mods);
+          // Motion: with a button held it is a drag; button 3 (none)
+          // is a hover move, reported when the terminal tracks all
+          // motion (1003).
+          if (btn == 3) {
+            emit_mouse(button, core::MouseAction::Move, pos, mods);
+          }
+          else {
+            emit_mouse(button, core::MouseAction::Drag, pos, mods);
+          }
         }
         else if (final_ch == U'm' || btn == 3) {
           emit_mouse(button, core::MouseAction::Up, pos, mods);
