@@ -185,7 +185,7 @@ TEST_CASE("ScrollRegionView: on_mouse wires the wheel (issue 5)") {
   wheel_up.action = core::MouseAction::Scroll;
   wheel_up.button = core::MouseButton::WheelUp;
   logs.on_mouse(wheel_up);
-  CHECK(logs.scroll_offset() == 3); // default 3 rows per notch
+  CHECK(logs.scroll_offset() == 5); // default 5 rows per notch
 
   core::MouseEvent wheel_down{};
   wheel_down.action = core::MouseAction::Scroll;

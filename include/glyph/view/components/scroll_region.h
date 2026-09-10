@@ -107,7 +107,9 @@ namespace glyph::view {
       }
     }
 
-    // Rows scrolled per wheel notch (default 3, like tmux).
+    // Rows scrolled per wheel notch (default 5; 3 felt sluggish in
+    // real use, macOS trackpads and touch emitters send frequent small
+    // events where the extra step reads as natural speed).
     void set_wheel_lines(std::size_t lines) {
       wheel_lines_ = lines == 0 ? 1 : lines;
     }
@@ -495,7 +497,7 @@ namespace glyph::view {
     std::deque<Line> lines_;
     std::size_t      max_lines_;
     std::size_t      offset_        = 0;
-    std::size_t      wheel_lines_   = 3;
+    std::size_t      wheel_lines_   = 5;
     std::size_t      lines_dropped_ = 0;
 
     bool         sel_active_ = false;

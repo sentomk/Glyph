@@ -330,14 +330,15 @@ int main() {
                    logs.selection_active()) {
           // Drag past the top edge pulls older output into view —
           // same effect as the wheel, driven by the selection gesture
-          // (tmux/terminal behavior). The selection is content
-          // anchored, so rows swept out of view mid-drag are still
-          // captured by extract_selection().
+          // (tmux/terminal behavior). 3 rows per drag event matches
+          // the wheel step; 1 row read as sluggish in practice. The
+          // selection is content anchored, so rows swept out of view
+          // mid-drag are still captured by extract_selection().
           if (m->pos.y <= msg_area.top()) {
-            logs.scroll_up(1);
+            logs.scroll_up(3);
             logs.select_extend(clamp(m->pos));
           } else if (m->pos.y >= msg_area.bottom() - 1) {
-            logs.scroll_down(1);
+            logs.scroll_down(3);
             logs.select_extend(clamp(m->pos));
           } else {
             logs.select_extend(clamp(m->pos));
