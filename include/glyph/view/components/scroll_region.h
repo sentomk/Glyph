@@ -225,6 +225,11 @@ namespace glyph::view {
 
       const std::size_t eff_offset =
           total > visible ? std::min(offset_, total - visible) : 0;
+      // Normalize the offset to the reachable range: scroll_up grows
+      // it unbounded, and any phantom head (from wheeling past the
+      // oldest row) makes scroll_down burn it off invisibly — the
+      // "wheel down does nothing for several notches" report.
+      offset_ = eff_offset;
       const std::size_t start = total - visible - eff_offset;
 
       // Remember the window's content mapping so mouse coordinates can
@@ -496,7 +501,9 @@ namespace glyph::view {
 
     std::deque<Line> lines_;
     std::size_t      max_lines_;
-    std::size_t      offset_        = 0;
+    // mutable: render() normalizes it to the reachable range (see
+    // render); reads through scroll_offset() see the normalized value.
+    mutable std::size_t      offset_      = 0;
     std::size_t      wheel_lines_   = 5;
     std::size_t      lines_dropped_ = 0;
 

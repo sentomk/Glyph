@@ -354,3 +354,24 @@ TEST_CASE("ScrollRegionView: hit-testing accounts for the area origin") {
   logs.select_extend({3, 1}); // through 'r'
   CHECK(logs.extract_selection() == "wor");
 }
+
+TEST_CASE("ScrollRegionView: offset normalizes at render; down always responds") {
+  ScrollRegionView logs;
+  for (int i = 1; i <= 5; ++i) {
+    logs.push_line("line" + std::to_string(i));
+  }
+
+  Frame frame{core::Size{10, 3}};
+  // Wheel up way past the oldest row: the raw offset grows unbounded,
+  // but the view can only show 2 rows above the bottom window.
+  logs.scroll_up(10);
+  logs.render(frame, core::Rect{0, 0, 10, 3});
+  CHECK(logs.scroll_offset() == 2); // normalized to the reachable range
+
+  // Wheel down now takes effect immediately instead of burning off
+  // phantom offset.
+  logs.scroll_down(5);
+  REQUIRE(logs.scroll_offset() == 0);
+  logs.render(frame, core::Rect{0, 0, 10, 3});
+  CHECK(frame.view().at(4, 2).ch == U'5'); // newest visible again
+}
