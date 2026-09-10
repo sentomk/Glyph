@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "glyph/core/cell.h"
+#include "glyph/core/event.h"
 #include "glyph/core/geometry.h"
 #include "glyph/core/style.h"
 #include "glyph/view/frame.h"
@@ -69,6 +70,29 @@ namespace glyph::view {
       offset_ = 0;
     }
 
+    // Mouse integration: wheel Scroll events scroll the region (issue
+    // #5). WheelUp scrolls towards older output, WheelDown back down;
+    // wheel_lines() rows per notch (terminals send one event per notch).
+    // Drag/press events are ignored — selection handling is app policy.
+    void on_mouse(const core::MouseEvent &m) {
+      if (m.action != core::MouseAction::Scroll) {
+        return;
+      }
+      if (m.button == core::MouseButton::WheelUp) {
+        scroll_up(wheel_lines_);
+      } else if (m.button == core::MouseButton::WheelDown) {
+        scroll_down(wheel_lines_);
+      }
+    }
+
+    // Rows scrolled per wheel notch (default 3, like tmux).
+    void set_wheel_lines(std::size_t lines) {
+      wheel_lines_ = lines == 0 ? 1 : lines;
+    }
+    std::size_t wheel_lines() const {
+      return wheel_lines_;
+    }
+
     std::size_t line_count() const {
       return lines_.size();
     }
@@ -112,7 +136,8 @@ namespace glyph::view {
   private:
     std::deque<Line> lines_;
     std::size_t      max_lines_;
-    std::size_t      offset_ = 0;
+    std::size_t      offset_      = 0;
+    std::size_t      wheel_lines_ = 3;
   };
 
 } // namespace glyph::view

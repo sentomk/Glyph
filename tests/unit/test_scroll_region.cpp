@@ -119,3 +119,37 @@ TEST_CASE("ScrollRegionView: long lines clip to the area width") {
   // Column 10 is outside the area and must stay untouched.
   CHECK(frame.view().at(10, 0).ch == U' ');
 }
+
+TEST_CASE("ScrollRegionView: on_mouse wires the wheel (issue 5)") {
+  ScrollRegionView logs;
+  for (int i = 1; i <= 5; ++i) {
+    logs.push_line("line" + std::to_string(i));
+  }
+
+  core::MouseEvent wheel_up{};
+  wheel_up.action = core::MouseAction::Scroll;
+  wheel_up.button = core::MouseButton::WheelUp;
+  logs.on_mouse(wheel_up);
+  CHECK(logs.scroll_offset() == 3); // default 3 rows per notch
+
+  core::MouseEvent wheel_down{};
+  wheel_down.action = core::MouseAction::Scroll;
+  wheel_down.button = core::MouseButton::WheelDown;
+  logs.on_mouse(wheel_down);
+  CHECK(logs.scroll_offset() == 0);
+
+  // Non-scroll events are ignored.
+  core::MouseEvent press{};
+  press.action = core::MouseAction::Down;
+  press.button = core::MouseButton::WheelUp;
+  logs.on_mouse(press);
+  CHECK(logs.scroll_offset() == 0);
+
+  // Custom step; zero clamps to one.
+  logs.set_wheel_lines(1);
+  logs.on_mouse(wheel_up);
+  CHECK(logs.scroll_offset() == 1);
+  logs.set_wheel_lines(0);
+  logs.on_mouse(wheel_up);
+  CHECK(logs.scroll_offset() == 2);
+}
