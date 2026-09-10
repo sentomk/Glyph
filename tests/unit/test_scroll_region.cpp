@@ -273,3 +273,63 @@ TEST_CASE("ScrollRegionView: replace_last_line on empty ring is a no-op") {
   logs.replace_last_line("x");
   CHECK(logs.line_count() == 0);
 }
+
+TEST_CASE("ScrollRegionView: content-anchored selection survives scroll") {
+  ScrollRegionView logs;
+  for (int i = 1; i <= 5; ++i) {
+    logs.push_line("line" + std::to_string(i));
+  }
+
+  Frame frame{core::Size{10, 3}};
+  logs.render(frame, core::Rect{0, 0, 10, 3}); // window: line3..line5
+  logs.select_begin({4, 2});                   // row 2 = "line5", '5'
+
+  // Drag past the top edge scrolls older output in; the selection
+  // head follows the content, not the frame row.
+  logs.scroll_up(2);
+  logs.render(frame, core::Rect{0, 0, 10, 3}); // window: line1..line3
+  logs.select_extend({0, 0});                  // row 0 = "line1", 'l'
+
+  // Five logical lines span the selection even though only three
+  // rows are visible — extract reads the ring, not the frame.
+  CHECK(logs.extract_selection() ==
+        "line1\nline2\nline3\nline4\nline5");
+}
+
+TEST_CASE("ScrollRegionView: selection highlight stays on content") {
+  ScrollRegionView logs;
+  for (int i = 1; i <= 5; ++i) {
+    logs.push_line("line" + std::to_string(i));
+  }
+
+  Frame frame{core::Size{10, 3}};
+  logs.render(frame, core::Rect{0, 0, 10, 3});
+  logs.select_begin({0, 2});  // line5 start
+  logs.scroll_up(2);
+  logs.render(frame, core::Rect{0, 0, 10, 3}); // window: line1..line3
+  logs.select_extend({0, 2});                  // extend to line3 start
+  logs.render(frame, core::Rect{0, 0, 10, 3}); // highlight applies on render
+
+  // Selection covers line3..line5 in content space; the visible part
+  // (line3, row 2) is highlighted, the rows above are not.
+  CHECK((frame.at(0, 2).style.attrs & core::Style::AttrReverse) != 0);
+  CHECK((frame.at(0, 1).style.attrs & core::Style::AttrReverse) == 0);
+  CHECK((frame.at(0, 0).style.attrs & core::Style::AttrReverse) == 0);
+  CHECK(logs.selection_active());
+
+  logs.select_clear();
+  logs.render(frame, core::Rect{0, 0, 10, 3});
+  CHECK((frame.at(0, 2).style.attrs & core::Style::AttrReverse) == 0);
+  CHECK(logs.extract_selection().empty());
+}
+
+TEST_CASE("ScrollRegionView: single-line selection span") {
+  ScrollRegionView logs;
+  logs.push_line("hello world");
+
+  Frame frame{core::Size{12, 1}};
+  logs.render(frame, core::Rect{0, 0, 12, 1});
+  logs.select_begin({0, 0});  // 'h'
+  logs.select_extend({4, 0}); // 'o' of hello
+  CHECK(logs.extract_selection() == "hello");
+}
