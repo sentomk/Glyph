@@ -228,8 +228,9 @@ namespace glyph::view {
       // Remember the window's content mapping so mouse coordinates can
       // be converted to content points (select_begin/extend).
       last_rows_.clear();
-      last_top_ = area.top();
-      last_w_   = area.size.w;
+      last_top_   = area.top();
+      last_left_  = area.left();
+      last_w_     = area.size.w;
 
       for (std::size_t row = 0; row < visible; ++row) {
         const VisualRow &vr      = rows[start + row];
@@ -314,8 +315,11 @@ namespace glyph::view {
       if (m.text.empty()) {
         return {m.abs_line, m.byte_begin};
       }
+      // Columns are area-relative: the first drawn cell of a row sits
+      // at last_left_, not frame column 0.
       const auto col = std::clamp<core::coord_t>(
-          p.x, core::coord_t{0}, core::coord_t(last_w_ - 1));
+          core::coord_t(p.x - last_left_), core::coord_t{0},
+          core::coord_t(last_w_ - 1));
 
       std::size_t   off = 0;
       core::coord_t w   = 0;
@@ -501,8 +505,9 @@ namespace glyph::view {
     // Content mapping of the last rendered window (render() is const;
     // these cache what it drew for mouse-coordinate conversion).
     mutable std::vector<VisualRow> last_rows_;
-    mutable core::coord_t          last_top_ = -1;
-    mutable core::coord_t          last_w_   = 0;
+    mutable core::coord_t          last_top_  = -1;
+    mutable core::coord_t          last_left_ = 0;
+    mutable core::coord_t          last_w_    = 0;
   };
 
 } // namespace glyph::view

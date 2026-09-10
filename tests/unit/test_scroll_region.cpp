@@ -333,3 +333,24 @@ TEST_CASE("ScrollRegionView: single-line selection span") {
   logs.select_extend({4, 0}); // 'o' of hello
   CHECK(logs.extract_selection() == "hello");
 }
+
+TEST_CASE("ScrollRegionView: hit-testing accounts for the area origin") {
+  // Regression: point_at compared mouse columns against row-relative
+  // widths without subtracting the area's left edge — in an area
+  // starting at frame column 1 (agent_chat's message pane), clicking
+  // the first character of a row selected the second one.
+  ScrollRegionView logs;
+  logs.push_line("hello");
+  logs.push_line("world");
+
+  Frame frame{core::Size{12, 2}};
+  logs.render(frame, core::Rect{1, 0, 10, 2}); // area starts at column 1
+
+  logs.select_begin({1, 0});  // 'h' — first cell of the area
+  logs.select_extend({1, 0});
+  CHECK(logs.extract_selection() == "h");
+
+  logs.select_begin({1, 1});  // 'w'
+  logs.select_extend({3, 1}); // through 'r'
+  CHECK(logs.extract_selection() == "wor");
+}
