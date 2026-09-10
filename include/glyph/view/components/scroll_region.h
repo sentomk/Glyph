@@ -156,8 +156,9 @@ namespace glyph::view {
     };
 
     // Expand the ring into visual rows at the given width: newlines
-    // split, long segments wrap without splitting wide glyphs, and an
-    // empty segment still occupies one blank row.
+    // split, segments word-wrap (break at the last space that fits;
+    // words longer than the width hard-break, never splitting a wide
+    // glyph), and an empty segment still occupies one blank row.
     void build_rows(std::vector<VisualRow> &out,
                     core::coord_t          width) const {
       for (const Line &line : lines_) {
@@ -170,18 +171,7 @@ namespace glyph::view {
           if (seg.empty()) {
             out.push_back({std::string_view{}, &line.style});
           } else {
-            std::string_view r = seg;
-            while (!r.empty()) {
-              const std::string_view part = clip_to_width(r, width);
-              if (part.empty()) {
-                // A zero-width cluster right at the boundary: drop one
-                // byte so the walk always makes progress.
-                r.remove_prefix(1);
-                continue;
-              }
-              out.push_back({part, &line.style});
-              r.remove_prefix(part.size());
-            }
+            wrap_segment(out, seg, width, &line.style);
           }
 
           if (nl == std::string_view::npos) {
@@ -189,6 +179,75 @@ namespace glyph::view {
           }
           rest = rest.substr(nl + 1);
         }
+      }
+    }
+
+    // Greedy word wrap of one segment. Break opportunities are spaces
+    // that already fit in the row; a word longer than the width breaks
+    // at the width instead. Trailing spaces at a break are dropped.
+    static void wrap_segment(std::vector<VisualRow> &out,
+                             std::string_view        seg,
+                             core::coord_t           width,
+                             const core::Style      *style) {
+      std::size_t  row_start   = 0;
+      std::size_t  cursor      = 0; // bytes accepted into the row
+      std::size_t  break_at    = 0; // bytes after the last fitting space
+      core::coord_t used       = 0;
+
+      while (cursor < seg.size()) {
+        const core::Grapheme g = core::next_grapheme(seg, cursor);
+        const core::coord_t  gw = g.width;
+
+        if (g.base == U' ' && used + gw <= width) {
+          break_at = g.next;
+          used     = core::coord_t(used + gw);
+          cursor   = g.next;
+          continue;
+        }
+
+        if (used + gw <= width) {
+          used   = core::coord_t(used + gw);
+          cursor = g.next;
+          continue;
+        }
+
+        // Overflow: prefer breaking after the last space that fit;
+        // hard-break when the row has no break opportunity. A row that
+        // is still empty takes the glyph anyway (a wide glyph on a
+        // width-1 area) so the walk always progresses.
+        std::size_t next_start = 0;
+        std::size_t row_end    = 0;
+        if (break_at > row_start) {
+          row_end    = break_at;
+          next_start = break_at;
+        } else if (cursor > row_start) {
+          row_end    = cursor;
+          next_start = cursor;
+        } else {
+          row_end    = g.next;
+          next_start = g.next;
+        }
+
+        std::string_view row = seg.substr(row_start, row_end - row_start);
+        while (!row.empty() && row.back() == ' ') {
+          row.remove_suffix(1); // drop spaces at the break
+        }
+        out.push_back({row, style});
+
+        row_start = next_start;
+        cursor    = next_start;
+        break_at  = next_start;
+        used      = 0;
+        // Re-consume the overflowing glyph on the next row unless it
+        // was placed by the empty-row branch above.
+        if (row_end < g.next && next_start >= g.next) {
+          cursor = g.next;
+          used   = gw;
+        }
+      }
+
+      if (cursor > row_start) {
+        out.push_back({seg.substr(row_start, cursor - row_start), style});
       }
     }
 

@@ -208,3 +208,41 @@ TEST_CASE("ScrollRegionView: on_mouse wires the wheel (issue 5)") {
   logs.on_mouse(wheel_up);
   CHECK(logs.scroll_offset() == 2);
 }
+
+TEST_CASE("ScrollRegionView: wrapping breaks at word boundaries") {
+  ScrollRegionView logs;
+  logs.push_line("hello world"); // width 8 -> "hello" / "world"
+
+  Frame frame{core::Size{8, 2}};
+  logs.render(frame, core::Rect{0, 0, 8, 2});
+  CHECK(frame.view().at(0, 0).ch == U'h');
+  CHECK(frame.view().at(5, 0).ch == U' '); // break, not mid-word
+  CHECK(frame.view().at(0, 1).ch == U'w');
+  CHECK(frame.view().at(4, 1).ch == U'd');
+  CHECK(frame.view().at(5, 1).ch == U' ');
+}
+
+TEST_CASE("ScrollRegionView: multiple word rows") {
+  ScrollRegionView logs;
+  logs.push_line("aaa bbbb ccc"); // width 7 -> "aaa" / "bbbb" / "ccc"
+
+  Frame frame{core::Size{8, 3}};
+  logs.render(frame, core::Rect{0, 0, 7, 3});
+  CHECK(frame.view().at(0, 0).ch == U'a');
+  CHECK(frame.view().at(0, 1).ch == U'b');
+  CHECK(frame.view().at(0, 2).ch == U'c');
+}
+
+TEST_CASE("ScrollRegionView: words longer than the width hard-break") {
+  ScrollRegionView logs;
+  logs.push_line("ab cd"); // "cd" fits after? width 3: "ab" / "cd"
+  logs.push_line("abcdefgh"); // no spaces: hard break "abc" / "def" / "gh"
+
+  Frame frame{core::Size{6, 5}};
+  logs.render(frame, core::Rect{0, 0, 3, 5});
+  CHECK(frame.view().at(0, 0).ch == U'a');
+  CHECK(frame.view().at(0, 1).ch == U'c');
+  CHECK(frame.view().at(0, 2).ch == U'a'); // long line hard-broken
+  CHECK(frame.view().at(0, 3).ch == U'd');
+  CHECK(frame.view().at(0, 4).ch == U'g');
+}
