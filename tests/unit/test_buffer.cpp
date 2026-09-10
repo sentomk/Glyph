@@ -54,6 +54,37 @@ TEST_CASE("overwriting a wide lead clears its spacer") {
   CHECK(b.const_view().at(1, 0) == Cell{}); // spacer cleared
 }
 
+TEST_CASE("writing a spacer back keeps the wide glyph") {
+  // Regression: put() treated any write onto a spacer as new content and
+  // erased the wide glyph to its left — a read-modify-write over a row
+  // (selection highlight, restyling) blanked every CJK glyph followed by
+  // its own spacer write-back. Only the last cell of such a loop survived.
+  Buffer b{Size{6, 1}};
+  auto v = b.view();
+  v.put(Point{0, 0}, Cell::from_char(U'中'));
+  v.put(Point{2, 0}, Cell::from_char(U'文'));
+  v.put(Point{4, 0}, Cell::from_char(U'a'));
+
+  // Read-modify-write every cell, exactly what highlight() does.
+  for (int x = 0; x < 6; ++x) {
+    Cell c = b.const_view().at(x, 0);
+    v.put(Point{x, 0}, c);
+  }
+
+  CHECK(b.const_view().at(0, 0).ch == U'中');
+  CHECK(b.const_view().at(2, 0).ch == U'文');
+  CHECK(b.const_view().at(4, 0).ch == U'a');
+}
+
+TEST_CASE("overwriting a spacer with content still clears the wide glyph") {
+  Buffer b{Size{4, 1}};
+  auto v = b.view();
+  v.put(Point{0, 0}, Cell::from_char(U'中'));
+  v.put(Point{1, 0}, Cell::from_char(U'B')); // real content onto spacer
+  CHECK(b.const_view().at(0, 0) == Cell{});  // orphaned lead cleared
+  CHECK(b.const_view().at(1, 0).ch == U'B');
+}
+
 TEST_CASE("fill_rect clips to bounds") {
   Buffer b{Size{3, 3}};
   b.view().fill_rect(Rect{1, 1, 10, 10}, Cell::from_char(U'#'));

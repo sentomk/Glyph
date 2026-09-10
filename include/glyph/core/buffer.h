@@ -246,8 +246,12 @@ namespace glyph::core {
         if (cur.width == 2 && p.x + 1 < size.w) {
           at(p.x + 1, p.y) = Cell{};
         }
-        // If overwriting a spacer cell, clear the left wide glyph.
-        if (cur.width == 0 && p.x > 0) {
+        // If overwriting a spacer cell, clear the left wide glyph —
+        // unless the write is itself a spacer: writing a spacer back is
+        // a read-modify-write of the same cell (e.g. re-styling a
+        // selection), not new content, and must not erase the glyph it
+        // belongs to.
+        if (cur.width == 0 && c.width != 0 && p.x > 0) {
           auto &left = at(p.x - 1, p.y);
           if (left.width == 2) {
             left = Cell{};

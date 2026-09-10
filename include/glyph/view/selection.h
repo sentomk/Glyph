@@ -70,6 +70,9 @@ namespace glyph::view {
       for (core::coord_t y = r.top(); y < r.bottom(); ++y) {
         for (core::coord_t x = r.left(); x < r.right(); ++x) {
           core::Cell c = f.at(x, y);
+          if (c.width == 0) {
+            continue; // spacer of a wide glyph: nothing to restyle
+          }
           c.style.attrs =
               static_cast<std::uint16_t>(c.style.attrs |
                                          core::Style::AttrReverse);

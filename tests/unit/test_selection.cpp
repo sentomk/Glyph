@@ -90,3 +90,21 @@ TEST_CASE("SelectionModel: rect is clamped to the frame") {
   sel.extend({9, 9});
   CHECK(sel.extract(frame) == "abcd");
 }
+
+TEST_CASE("SelectionModel: highlight preserves wide glyphs") {
+  // Regression: Buffer::put treated a spacer write-back as new content
+  // and erased the wide glyph to its left, so highlighting a CJK row
+  // blanked it — on screen and in extract().
+  Frame frame{core::Size{10, 1}};
+  draw_text(frame, {0, 0}, "中文a");
+
+  SelectionModel sel;
+  sel.begin({0, 0});
+  sel.extend({4, 0});
+  sel.highlight(frame);
+
+  CHECK((frame.at(0, 0).style.attrs & core::Style::AttrReverse) != 0);
+  CHECK(frame.at(0, 0).ch == U'中');
+  CHECK(frame.at(2, 0).ch == U'文');
+  CHECK(sel.extract(frame) == "中文a");
+}
