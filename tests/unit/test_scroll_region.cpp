@@ -246,3 +246,30 @@ TEST_CASE("ScrollRegionView: words longer than the width hard-break") {
   CHECK(frame.view().at(0, 3).ch == U'd');
   CHECK(frame.view().at(0, 4).ch == U'g');
 }
+
+TEST_CASE("ScrollRegionView: replace_last_line mutates without refollow") {
+  ScrollRegionView logs;
+  for (int i = 1; i <= 5; ++i) {
+    logs.push_line("line" + std::to_string(i));
+  }
+  logs.scroll_up(2); // reader is browsing older output
+
+  logs.replace_last_line("line5+");
+  CHECK(logs.scroll_offset() == 2); // mutation must not yank to bottom
+
+  Frame frame{core::Size{10, 3}};
+  logs.render(frame, core::Rect{0, 0, 10, 3});
+  // window: line1..line3 (offset 2 from 5 lines); edited line is below
+  CHECK(frame.view().at(4, 0).ch == U'1');
+  CHECK(frame.view().at(4, 2).ch == U'3');
+
+  logs.scroll_to_bottom();
+  logs.render(frame, core::Rect{0, 0, 10, 3});
+  CHECK(frame.view().at(5, 2).ch == U'+'); // "line5+" at the bottom
+}
+
+TEST_CASE("ScrollRegionView: replace_last_line on empty ring is a no-op") {
+  ScrollRegionView logs;
+  logs.replace_last_line("x");
+  CHECK(logs.line_count() == 0);
+}

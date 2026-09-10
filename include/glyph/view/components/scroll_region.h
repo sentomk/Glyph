@@ -60,6 +60,19 @@ namespace glyph::view {
       offset_ = 0;
     }
 
+    // Replace the newest line's text in place (streaming updates:
+    // growing text re-wraps only its own rows, so other lines' wrapped
+    // positions — and any content-anchored selection — stay stable).
+    // Unlike push_line this does NOT re-follow the bottom: mutating
+    // existing content must not yank a reader who scrolled up.
+    // No-op when the ring is empty.
+    void replace_last_line(std::string text, core::Style style = {}) {
+      if (lines_.empty()) {
+        return;
+      }
+      lines_.back() = Line{std::move(text), style};
+    }
+
     // Scroll older output into view; offset counts lines back from the
     // newest. Clamped to the oldest available line at render time.
     void scroll_up(std::size_t count = 1) {
