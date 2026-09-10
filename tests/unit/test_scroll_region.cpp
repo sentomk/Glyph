@@ -107,17 +107,72 @@ TEST_CASE("ScrollRegionView: per-line style is applied") {
   CHECK((frame.view().at(0, 0).style.flags & core::Style::FlagFgDefault) != 0);
 }
 
-TEST_CASE("ScrollRegionView: long lines clip to the area width") {
+TEST_CASE("ScrollRegionView: overflow wraps, bottom row of a 1-row view") {
   ScrollRegionView logs;
   logs.push_line("0123456789AB");
 
   Frame frame{core::Size{20, 1}};
   logs.render(frame, core::Rect{2, 0, 8, 1}); // columns 2..9
 
-  CHECK(frame.view().at(2, 0).ch == U'0');
-  CHECK(frame.view().at(9, 0).ch == U'7');
-  // Column 10 is outside the area and must stay untouched.
-  CHECK(frame.view().at(10, 0).ch == U' ');
+  // Width 8 wraps into "01234567" + "89AB"; the auto-followed window
+  // shows the last visual row.
+  CHECK(frame.view().at(2, 0).ch == U'8');
+  CHECK(frame.view().at(5, 0).ch == U'B');
+  // Column 6 is past the wrapped row and outside the area: untouched.
+  CHECK(frame.view().at(6, 0).ch == U' ');
+}
+
+TEST_CASE("ScrollRegionView: long lines wrap onto visual rows") {
+  ScrollRegionView logs;
+  logs.push_line("abcdefgh"); // width 5 -> "abcde" + "fgh"
+
+  Frame frame{core::Size{8, 2}};
+  logs.render(frame, core::Rect{0, 0, 5, 2});
+  CHECK(frame.view().at(0, 0).ch == U'a');
+  CHECK(frame.view().at(4, 0).ch == U'e');
+  CHECK(frame.view().at(0, 1).ch == U'f');
+  CHECK(frame.view().at(2, 1).ch == U'h');
+  CHECK(frame.view().at(3, 1).ch == U' '); // row 2 is shorter
+}
+
+TEST_CASE("ScrollRegionView: newlines split into rows") {
+  ScrollRegionView logs;
+  logs.push_line("a\n\nb"); // three rows: "a", "", "b"
+
+  Frame frame{core::Size{4, 3}};
+  logs.render(frame, core::Rect{0, 0, 4, 3});
+  CHECK(frame.view().at(0, 0).ch == U'a');
+  CHECK(frame.view().at(0, 1).ch == U' '); // blank row kept
+  CHECK(frame.view().at(0, 2).ch == U'b');
+}
+
+TEST_CASE("ScrollRegionView: wrapping never splits wide glyphs") {
+  ScrollRegionView logs;
+  logs.push_line("中文abc"); // width 4 -> "中文" (4 cols) + "abc"
+
+  Frame frame{core::Size{6, 2}};
+  logs.render(frame, core::Rect{0, 0, 4, 2});
+  CHECK(frame.view().at(0, 0).ch == U'中');
+  CHECK(frame.view().at(2, 0).ch == U'文');
+  CHECK(frame.view().at(0, 1).ch == U'a');
+}
+
+TEST_CASE("ScrollRegionView: scroll offset counts visual rows") {
+  ScrollRegionView logs;
+  logs.push_line("0123456789"); // width 5 -> rows "01234" "56789"
+  logs.push_line("tail");
+
+  Frame frame{core::Size{6, 2}};
+  // Auto-follow: last two visual rows = "56789" + "tail".
+  logs.render(frame, core::Rect{0, 0, 5, 2});
+  CHECK(frame.view().at(0, 0).ch == U'5');
+  CHECK(frame.view().at(0, 1).ch == U't');
+
+  // One visual row up: "01234" + "56789".
+  logs.scroll_up(1);
+  logs.render(frame, core::Rect{0, 0, 5, 2});
+  CHECK(frame.view().at(0, 0).ch == U'0');
+  CHECK(frame.view().at(0, 1).ch == U'5');
 }
 
 TEST_CASE("ScrollRegionView: on_mouse wires the wheel (issue 5)") {
