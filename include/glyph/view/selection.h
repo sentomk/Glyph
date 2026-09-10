@@ -13,7 +13,10 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <string>
+#include <utility>
 
 #include "glyph/core/cell.h"
 #include "glyph/core/geometry.h"
@@ -28,7 +31,24 @@ namespace glyph::view {
   class SelectionModel final {
 
   public:
-    SelectionModel() = default;
+    // Flow: terminal-style selection — text between the two points in
+    // reading order (first row from the start column to its end, full
+    // rows between, last row up to the end column). This is what a
+    // drag from mid-word to mid-word should copy.
+    // Rect: block selection — the column intersection on every row
+    // (vim visual-block style).
+    enum class Mode : std::uint8_t { Flow, Rect };
+
+    explicit SelectionModel(Mode mode = Mode::Flow) noexcept
+        : mode_(mode) {
+    }
+
+    void set_mode(Mode mode) noexcept {
+      mode_ = mode;
+    }
+    [[nodiscard]] Mode mode() const noexcept {
+      return mode_;
+    }
 
     // Start a selection at a cell coordinate (mouse press).
     void begin(core::Point anchor) noexcept {
@@ -66,9 +86,9 @@ namespace glyph::view {
       if (!active_) {
         return;
       }
-      const core::Rect r = clamp(f);
-      for (core::coord_t y = r.top(); y < r.bottom(); ++y) {
-        for (core::coord_t x = r.left(); x < r.right(); ++x) {
+      for_each_span(f, [&](core::coord_t y, core::coord_t x0,
+                           core::coord_t x1) {
+        for (core::coord_t x = x0; x < x1; ++x) {
           core::Cell c = f.at(x, y);
           if (c.width == 0) {
             continue; // spacer of a wide glyph: nothing to restyle
@@ -78,7 +98,7 @@ namespace glyph::view {
                                          core::Style::AttrReverse);
           f.set(core::Point{x, y}, c);
         }
-      }
+      });
     }
 
     // Extract the selected text as UTF-8. Wide glyphs emit their single
@@ -90,16 +110,16 @@ namespace glyph::view {
       if (!active_) {
         return out;
       }
-      const core::Rect r = clamp(f);
-      bool             first_row = true;
-      for (core::coord_t y = r.top(); y < r.bottom(); ++y) {
+      bool first_row = true;
+      for_each_span(f, [&](core::coord_t y, core::coord_t x0,
+                           core::coord_t x1) {
         if (!first_row) {
           out.push_back('\n');
         }
         first_row = false;
 
         std::string row;
-        for (core::coord_t x = r.left(); x < r.right(); ++x) {
+        for (core::coord_t x = x0; x < x1; ++x) {
           const core::Cell c = f.at(x, y);
           if (c.width == 0) {
             continue; // spacer of a wide glyph
@@ -114,21 +134,62 @@ namespace glyph::view {
           row.pop_back(); // trim trailing spaces
         }
         out += row;
-      }
+      });
       return out;
     }
 
   private:
-    // Intersection of the selection with the frame bounds.
-    [[nodiscard]] core::Rect clamp(const Frame &f) const noexcept {
+    // Visit the selected spans of a frame as (row, x_begin, x_end)
+    // pairs, clipped to the frame. Flow mode walks reading order;
+    // Rect mode visits the column intersection on every row.
+    template <typename Fn>
+    void for_each_span(const Frame &f, Fn &&fn) const {
       const core::Size sz = f.size();
-      const core::Rect r  = rect();
-      const core::coord_t x0 = r.left() < 0 ? 0 : r.left();
-      const core::coord_t y0 = r.top() < 0 ? 0 : r.top();
-      const core::coord_t x1 = r.right() > sz.w ? sz.w : r.right();
-      const core::coord_t y1 = r.bottom() > sz.h ? sz.h : r.bottom();
-      return core::Rect{core::Point{x0, y0},
-                        core::Size{x1 - x0, y1 - y0}};
+      if (sz.w <= 0 || sz.h <= 0) {
+        return;
+      }
+
+      core::Point a = anchor_;
+      core::Point b = head_;
+      if (b.y < a.y || (b.y == a.y && b.x < a.x)) {
+        std::swap(a, b);
+      }
+
+      const auto clamp_x = [&](core::coord_t x) {
+        return std::clamp(x, core::coord_t{0},
+                          core::coord_t(sz.w - 1));
+      };
+      const auto clamp_y = [&](core::coord_t y) {
+        return std::clamp(y, core::coord_t{0},
+                          core::coord_t(sz.h - 1));
+      };
+
+      if (mode_ == Mode::Rect) {
+        const core::coord_t x0 = clamp_x(std::min(a.x, b.x));
+        const core::coord_t x1 =
+            clamp_x(std::max(a.x, b.x)) + 1;
+        for (core::coord_t y = clamp_y(a.y); y <= clamp_y(b.y); ++y) {
+          fn(y, x0, x1);
+        }
+        return;
+      }
+
+      // Flow.
+      const core::coord_t y0 = clamp_y(a.y);
+      const core::coord_t y1 = clamp_y(b.y);
+      if (y0 == y1) {
+        const core::coord_t x0 = clamp_x(std::min(a.x, b.x));
+        const core::coord_t x1 = clamp_x(std::max(a.x, b.x)) + 1;
+        fn(y0, x0, x1);
+        return;
+      }
+      // First row: from the start column to the row end; rows between
+      // are full; last row: from the row start to the end column.
+      fn(y0, clamp_x(a.x), sz.w);
+      for (core::coord_t y = y0 + 1; y < y1; ++y) {
+        fn(y, 0, sz.w);
+      }
+      fn(y1, 0, clamp_x(b.x) + 1);
     }
 
     static void append_utf8(std::string &out, char32_t cp) noexcept {
@@ -152,6 +213,7 @@ namespace glyph::view {
     core::Point anchor_{};
     core::Point head_{};
     bool        active_ = false;
+    Mode        mode_   = Mode::Flow;
   };
 
 } // namespace glyph::view

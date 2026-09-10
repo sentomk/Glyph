@@ -37,7 +37,7 @@ TEST_CASE("SelectionModel: clear deactivates") {
 
 TEST_CASE("SelectionModel: highlight applies reverse video in-rect only") {
   Frame          frame{core::Size{6, 2}};
-  SelectionModel sel;
+  SelectionModel sel{SelectionModel::Mode::Rect}; // explicit block mode
   sel.begin({1, 0});
   sel.extend({3, 1});
   sel.highlight(frame);
@@ -46,6 +46,56 @@ TEST_CASE("SelectionModel: highlight applies reverse video in-rect only") {
   CHECK((frame.at(3, 1).style.attrs & core::Style::AttrReverse) != 0);
   CHECK((frame.at(0, 0).style.attrs & core::Style::AttrReverse) == 0);
   CHECK((frame.at(4, 0).style.attrs & core::Style::AttrReverse) == 0);
+}
+
+TEST_CASE("SelectionModel: flow highlight covers reading order") {
+  // Default mode: row 0 from col 1 to the row end, row 1 from start
+  // to col 3 — a drag across two rows selects the text between the
+  // points, not a column intersection.
+  Frame          frame{core::Size{6, 2}};
+  SelectionModel sel;
+  CHECK(sel.mode() == SelectionModel::Mode::Flow);
+  sel.begin({1, 0});
+  sel.extend({3, 1});
+  sel.highlight(frame);
+
+  CHECK((frame.at(0, 0).style.attrs & core::Style::AttrReverse) == 0);
+  CHECK((frame.at(1, 0).style.attrs & core::Style::AttrReverse) != 0);
+  CHECK((frame.at(5, 0).style.attrs & core::Style::AttrReverse) != 0);
+  CHECK((frame.at(0, 1).style.attrs & core::Style::AttrReverse) != 0);
+  CHECK((frame.at(3, 1).style.attrs & core::Style::AttrReverse) != 0);
+  CHECK((frame.at(4, 1).style.attrs & core::Style::AttrReverse) == 0);
+}
+
+TEST_CASE("SelectionModel: flow extract copies text between points") {
+  // The agent_chat report: dragging from mid-word on row A to mid-word
+  // on row B must copy the whole span, not the per-row column slice
+  // the rect semantics produced ("I ca" / " the").
+  Frame frame{core::Size{12, 2}};
+  draw_text(frame, {0, 0}, "hello world");
+  draw_text(frame, {0, 1}, "second line");
+
+  SelectionModel sel;
+  sel.begin({1, 0}); // 'e'
+  sel.extend({4, 1});
+  CHECK(sel.extract(frame) == "ello world\nsecon");
+
+  // Backward drag selects the same text.
+  SelectionModel back;
+  back.begin({4, 1});
+  back.extend({1, 0});
+  CHECK(back.extract(frame) == "ello world\nsecon");
+}
+
+TEST_CASE("SelectionModel: rect extract keeps column slices") {
+  Frame frame{core::Size{12, 2}};
+  draw_text(frame, {0, 0}, "hello world");
+  draw_text(frame, {0, 1}, "second line");
+
+  SelectionModel sel{SelectionModel::Mode::Rect};
+  sel.begin({1, 0});
+  sel.extend({4, 1});
+  CHECK(sel.extract(frame) == "ello\necon");
 }
 
 TEST_CASE("SelectionModel: extract single row, no trailing newline") {
