@@ -1,14 +1,15 @@
 // samples/ui/agent_chat.cpp
 //
 // TUI AI Agent chat demo.
-// Shows: streaming text, scrollable message history, panels, input, spinner.
+// Shows: streaming text, scrollable (wrapped) message history via
+// ScrollRegionView, mouse-drag selection with drag-at-edge scroll-back,
+// wheel scrolling, clipboard copy, text input, spinner.
 
 #include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <utility>
 #include <vector>
 
 #include "glyph/core/cell.h"
@@ -16,16 +17,18 @@
 #include "glyph/core/event.h"
 #include "glyph/core/geometry.h"
 #include "glyph/core/style.h"
-#include "glyph/input/input_guard.h"
 #include "glyph/input/input.h"
+#include "glyph/input/input_guard.h"
+#include "glyph/platform/clipboard.h"
+#include "glyph/render/ansi/ansi_renderer.h"
 #include "glyph/render/terminal.h"
 #include "glyph/view/components/fill.h"
 #include "glyph/view/components/label.h"
+#include "glyph/view/components/scroll_region.h"
+#include "glyph/view/components/status_line.h"
 #include "glyph/view/components/text_input.h"
 #include "glyph/view/frame.h"
-#include "glyph/view/layout/align.h"
-#include "glyph/view/layout/inset.h"
-#include "glyph/view/view.h"
+#include "glyph/view/selection.h"
 
 namespace {
 
@@ -42,12 +45,11 @@ constexpr core::Color kAccentUsr = 0xA3BE8C;
 constexpr core::Color kDimmed    = 0x4C566A;
 constexpr core::Color kWarn      = 0xEBCB8B;
 
-// A single chat message.
+// A single chat message (UTF-8).
 struct Message {
   enum Role { User, Assistant };
-  Role           role;
-  std::u32string text;
-  bool           streaming = false;
+  Role        role;
+  std::string text;
 };
 
 // Simulated AI response that streams token-by-token.
@@ -65,13 +67,14 @@ struct StreamState {
   }
 
   bool tick() {
-    if (!active) return false;
+    if (!active)
+      return false;
     if (think_ticks > 0) {
       --think_ticks;
       return true;
     }
     if (chars_shown < full_response.size()) {
-      std::size_t step = 2 + (chars_shown % 3);
+      const std::size_t step = 2 + (chars_shown % 3);
       chars_shown = std::min(chars_shown + step, full_response.size());
       return true;
     }
@@ -80,11 +83,14 @@ struct StreamState {
   }
 
   std::u32string visible_text() const {
-    if (think_ticks > 0) return U"";
+    if (think_ticks > 0)
+      return U"";
     return full_response.substr(0, chars_shown);
   }
 
-  bool done() const { return !active; }
+  bool done() const {
+    return !active;
+  }
 };
 
 // Canned responses for the demo.
@@ -109,223 +115,32 @@ const std::u32string kResponses[] = {
     U"and each handler returns a Command variant.",
 };
 
-// Spinner frames.
-const char32_t *kSpinner[] = {
-    U"|", U"/", U"-", U"\\",
-};
+const char32_t *kSpinner[] = {U"|", U"/", U"-", U"\\"};
 
-// Render a single message bubble.
-class MessageView final : public view::View {
-public:
-  MessageView(const Message &msg, core::coord_t width)
-      : msg_(msg), width_(width) {}
-
-  void render(view::Frame &f, core::Rect area) const override {
-    if (area.empty()) return;
-
-    const bool is_user = (msg_.role == Message::User);
-    const auto accent  = is_user ? kAccentUsr : kAccentBot;
-    const auto prefix  = is_user ? U"> " : U"  ";
-
-    auto label = view::LabelView(prefix + msg_.text)
-                     .set_align(view::layout::AlignH::Left,
-                                view::layout::AlignV::Top)
-                     .set_wrap_mode(view::LabelView::WrapMode::Word)
-                     .set_cell(core::Cell::from_char(
-                         U' ', core::Style{}.fg(accent)));
-
-    label.render(f, area);
+void append_utf8(std::string &out, char32_t cp) {
+  if (cp < 0x80) {
+    out.push_back(char(cp));
+  } else if (cp < 0x800) {
+    out.push_back(char(0xC0 | (cp >> 6)));
+    out.push_back(char(0x80 | (cp & 0x3F)));
+  } else if (cp < 0x10000) {
+    out.push_back(char(0xE0 | (cp >> 12)));
+    out.push_back(char(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(char(0x80 | (cp & 0x3F)));
+  } else {
+    out.push_back(char(0xF0 | (cp >> 18)));
+    out.push_back(char(0x80 | ((cp >> 12) & 0x3F)));
+    out.push_back(char(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(char(0x80 | (cp & 0x3F)));
   }
+}
 
-  static core::coord_t estimate_height(const std::u32string &text,
-                                       core::coord_t width) {
-    if (width <= 2) return 1;
-    core::coord_t w   = 0;
-    core::coord_t lines = 1;
-    for (char32_t ch : text) {
-      if (ch == U'\n') {
-        ++lines;
-        w = 0;
-        continue;
-      }
-      ++w;
-      if (w >= width - 2) {
-        ++lines;
-        w = 0;
-      }
-    }
-    return lines;
+std::string to_utf8(const std::u32string &s) {
+  std::string out;
+  for (char32_t c : s) {
+    append_utf8(out, c);
   }
-
-private:
-  const Message &msg_;
-  core::coord_t  width_;
-};
-
-// Render the full chat UI.
-void render_ui(view::Frame &frame, const std::vector<Message> &messages,
-               const StreamState &stream, int spinner_phase,
-               view::TextInputView &input_field) {
-  const auto bounds = frame.bounds();
-  if (bounds.empty()) return;
-
-  // Background fill.
-  frame.fill(core::Cell::from_char(U' ', core::Style{}.bg(kBgDark)));
-
-  // Layout: header(1) + messages(flex) + separator(1) + input(3) + status(1)
-  const core::coord_t header_h = 1;
-  const core::coord_t sep_h    = 1;
-  const core::coord_t input_h  = 3;
-  const core::coord_t status_h = 1;
-  const core::coord_t msg_h =
-      bounds.size.h - header_h - sep_h - input_h - status_h;
-
-  if (msg_h <= 0) return;
-
-  const auto header_area = core::Rect{
-      bounds.origin, core::Size{bounds.size.w, header_h}};
-  const auto msg_area = core::Rect{
-      {bounds.origin.x, core::coord_t(bounds.origin.y + header_h)},
-      core::Size{bounds.size.w, msg_h}};
-  const auto sep_area = core::Rect{
-      {bounds.origin.x, core::coord_t(msg_area.bottom())},
-      core::Size{bounds.size.w, sep_h}};
-  const auto input_area = core::Rect{
-      {bounds.origin.x, core::coord_t(sep_area.bottom())},
-      core::Size{bounds.size.w, input_h}};
-  const auto status_area = core::Rect{
-      {bounds.origin.x, core::coord_t(input_area.bottom())},
-      core::Size{bounds.size.w, status_h}};
-
-  // -- Header --
-  auto header_label =
-      view::LabelView(U" Glyph Agent Chat")
-          .set_align(view::layout::AlignH::Left,
-                     view::layout::AlignV::Center)
-          .set_cell(core::Cell::from_char(
-              U' ', core::Style{}.fg(kFgBright).bg(kBgPanel).bold()));
-  // Fill header background.
-  view::FillView header_bg(
-      core::Cell::from_char(U' ', core::Style{}.bg(kBgPanel)));
-  header_bg.render(frame, header_area);
-  header_label.render(frame, header_area);
-
-  // -- Messages area --
-  const auto content_area = view::layout::inset_rect(
-      msg_area, view::layout::Insets::hv(1, 0));
-  const core::coord_t content_w = content_area.size.w;
-
-  // Compute total height needed and render messages bottom-aligned.
-  struct MsgLayout {
-    std::size_t   idx;
-    core::coord_t height;
-  };
-  std::vector<MsgLayout> layouts;
-  core::coord_t total_h = 0;
-  for (std::size_t i = 0; i < messages.size(); ++i) {
-    auto h = MessageView::estimate_height(
-        (messages[i].role == Message::User ? U"> " : U"  ") +
-            messages[i].text,
-        content_w);
-    h = core::coord_t(h + 1); // gap between messages
-    layouts.push_back({i, h});
-    total_h = core::coord_t(total_h + h);
-  }
-
-  // Streaming indicator.
-  if (stream.active && stream.think_ticks > 0) {
-    total_h = core::coord_t(total_h + 2);
-  }
-
-  // Render from bottom up, scrolled to show latest.
-  core::coord_t y = core::coord_t(content_area.bottom());
-
-  // Thinking indicator at the bottom.
-  if (stream.active && stream.think_ticks > 0) {
-    y = core::coord_t(y - 1);
-    std::u32string spinner_text = U"  ";
-    spinner_text += kSpinner[spinner_phase % 4];
-    spinner_text += U" thinking...";
-    auto think_label =
-        view::LabelView(spinner_text)
-            .set_align(view::layout::AlignH::Left,
-                       view::layout::AlignV::Top)
-            .set_cell(core::Cell::from_char(
-                U' ', core::Style{}.fg(kWarn).bg(kBgDark)));
-    think_label.render(
-        frame,
-        core::Rect{{content_area.left(), y},
-                   core::Size{content_w, 1}});
-    y = core::coord_t(y - 1);
-  }
-
-  // Render messages in reverse so newest is at bottom.
-  for (auto it = layouts.rbegin(); it != layouts.rend(); ++it) {
-    y = core::coord_t(y - it->height);
-    if (y >= content_area.bottom()) continue;
-    if (core::coord_t(y + it->height) <= content_area.top()) break;
-
-    core::Rect msg_rect{
-        {content_area.left(), std::max(y, content_area.top())},
-        core::Size{content_w,
-                   std::min(it->height,
-                            core::coord_t(content_area.bottom() - y))}};
-
-    MessageView mv(messages[it->idx], content_w);
-    mv.render(frame, msg_rect);
-  }
-
-  // -- Separator --
-  auto sep_cell = core::Cell::from_char(U'-', core::Style{}.fg(kDimmed));
-  for (core::coord_t x = sep_area.left(); x < sep_area.right(); ++x) {
-    frame.set({x, sep_area.top()}, sep_cell);
-  }
-
-  // -- Input area --
-  view::FillView input_bg(
-      core::Cell::from_char(U' ', core::Style{}.bg(kBgPanel)));
-  input_bg.render(frame, input_area);
-
-  auto input_content = view::layout::inset_rect(
-      input_area, view::layout::Insets::hv(1, 1));
-
-  // Prompt prefix "> " drawn as a label; the editable field follows it.
-  const core::coord_t prompt_w = 2;
-  auto prompt_label =
-      view::LabelView(U"> ")
-          .set_align(view::layout::AlignH::Left, view::layout::AlignV::Top)
-          .set_cell(core::Cell::from_char(
-              U' ', core::Style{}.fg(kFgBright).bg(kBgPanel)));
-  prompt_label.render(frame, input_content);
-
-  auto field_area = input_content;
-  field_area.origin.x = core::coord_t(field_area.origin.x + prompt_w);
-  field_area.size.w   = core::coord_t(field_area.size.w - prompt_w);
-
-  // Hide the caret while the assistant is streaming.
-  input_field.set_show_cursor(!stream.active);
-  input_field.render(frame, field_area);
-
-  // -- Status bar --
-  view::FillView status_bg(
-      core::Cell::from_char(U' ', core::Style{}.bg(0x434C5E)));
-  status_bg.render(frame, status_area);
-
-  std::u32string status_left = U" Enter:send  Esc:quit";
-  std::u32string status_right =
-      stream.active ? U"streaming... " : U"ready ";
-  auto sl = view::LabelView(status_left)
-                .set_align(view::layout::AlignH::Left,
-                           view::layout::AlignV::Center)
-                .set_cell(core::Cell::from_char(
-                    U' ', core::Style{}.fg(kFgNormal).bg(0x434C5E)));
-  auto sr = view::LabelView(status_right)
-                .set_align(view::layout::AlignH::Right,
-                           view::layout::AlignV::Center)
-                .set_cell(core::Cell::from_char(
-                    U' ', core::Style{}.fg(kWarn).bg(0x434C5E)));
-  sl.render(frame, status_area);
-  sr.render(frame, status_area);
+  return out;
 }
 
 } // namespace
@@ -334,110 +149,253 @@ int main() {
   using namespace glyph;
   using namespace std::chrono_literals;
 
-  render::TerminalApp app{std::cout};
-  auto input_owner_ = glyph::input::make_default_input();
-  auto &input = *input_owner_;
-  input::InputGuard   guard(input, input::InputMode::Raw);
+  render::FullScreenGuard guard;
+
+  auto input_owner = input::make_default_input();
+  auto &in         = *input_owner;
+  input::InputGuard modes(in, input::InputMode::Raw |
+                                   input::InputMode::Mouse);
+
+  render::AnsiRenderer renderer{std::cout};
+  core::Size           size = render::terminal_frame_size({80, 24});
 
   std::vector<Message> messages;
   messages.push_back(
       {Message::Assistant,
-       U"Hello! I'm an AI agent running in your terminal. "
-       U"Ask me anything about this codebase. "
-       U"(This is a Glyph TUI demo.)",
-       false});
+       "Hello! I'm an AI agent running in your terminal. Ask me "
+       "anything about this codebase. (Glyph TUI demo.)\n\n"
+       "Scroll with the wheel; drag to select (drag past the top "
+       "edge to reach earlier output); y copies the selection."});
 
   StreamState    stream;
   view::TextInputView input_field;
-  input_field.set_cell(core::Cell::from_char(
-      U' ', core::Style{}.fg(kFgBright).bg(kBgPanel)));
+  input_field.set_cell(
+      core::Cell::from_char(U' ', core::Style{}.fg(kFgBright).bg(kBgPanel)));
   input_field.set_placeholder(U"Type a message...");
   input_field.set_placeholder_cell(core::Cell::from_char(
       U' ', core::Style{}.fg(kFgNormal).bg(kBgPanel).dim()));
-  int            response_idx = 0;
-  int            spinner_phase = 0;
-  bool           should_quit = false;
-  bool           needs_render = true;
-  core::Size     last_size{};
 
+  view::ScrollRegionView logs{1000};
+  view::SelectionModel   selection;
+
+  std::string note;
+  int         spinner_phase = 0;
+  int         response_idx  = 0;
+
+  // Rebuild the scrollback from the message list. The offset is
+  // restored so a scrolled-up reader keeps their position while
+  // streaming continues.
+  auto rebuild_logs = [&]() {
+    const std::size_t off = logs.scroll_offset();
+    logs.clear();
+    for (const Message &m : messages) {
+      const bool        is_user = (m.role == Message::User);
+      const core::Style style   = core::Style{}.fg(is_user ? kAccentUsr
+                                                           : kAccentBot);
+      std::string       line    = is_user ? "> " : "  ";
+      line += m.text;
+      logs.push_line(line, style);
+      logs.push_line("", core::Style{});
+    }
+    if (stream.active && stream.think_ticks > 0) {
+      std::string thinking = "  ";
+      thinking += char(*kSpinner[spinner_phase % 4]);
+      thinking += " thinking...";
+      logs.push_line(thinking, core::Style{}.fg(kWarn));
+    }
+    if (off > 0) {
+      logs.scroll_up(off);
+    }
+  };
+  rebuild_logs();
+
+  auto layout = [&]() {
+    const core::coord_t header_h = 1, sep_h = 1, input_h = 3, status_h = 1;
+    const core::coord_t msg_h = core::coord_t(
+        size.h - header_h - sep_h - input_h - status_h);
+    struct {
+      core::Rect header, messages, sep, input, status;
+    } r;
+    r.header = {0, 0, size.w, header_h};
+    r.messages = {0, header_h, size.w, msg_h};
+    r.sep = {0, core::coord_t(r.messages.bottom()), size.w, sep_h};
+    r.input = {0, core::coord_t(r.sep.bottom()), size.w, input_h};
+    r.status = {0, core::coord_t(r.input.bottom()), size.w, status_h};
+    return r;
+  };
+
+  bool running = true;
   auto last_tick = std::chrono::steady_clock::now();
 
-  for (;;) {
-    const auto term = app.size();
-    const auto size =
-        core::Size{term.valid ? term.cols : 80, term.valid ? term.rows : 24};
-    if (size.w <= 0 || size.h <= 0) {
+  while (running) {
+    const auto l = layout();
+    if (l.messages.size.h <= 2 || size.w <= 4) {
       std::this_thread::sleep_for(50ms);
       continue;
     }
 
-    if (size != last_size) {
-      needs_render = true;
-      last_size = size;
+    // -- Paint (immediate mode; the diff renderer skips no-op frames) --
+    view::Frame frame{size};
+    frame.fill(core::Cell::from_char(U' ', core::Style{}.bg(kBgDark)));
+
+    view::FillView header_bg(
+        core::Cell::from_char(U' ', core::Style{}.bg(kBgPanel)));
+    header_bg.render(frame, l.header);
+    auto header = view::LabelView(U" Glyph Agent Chat")
+                      .set_cell(core::Cell::from_char(
+                          U' ', core::Style{}.fg(kFgBright).bg(kBgPanel).bold()));
+    header.render(frame, l.header);
+
+    const core::Rect msg_area{1, l.messages.top() + 1,
+                              core::coord_t(size.w - 2),
+                              core::coord_t(l.messages.size.h - 2)};
+    logs.render(frame, msg_area);
+    selection.highlight(frame);
+
+    for (core::coord_t x = l.sep.left(); x < l.sep.right(); ++x) {
+      frame.set({x, l.sep.top()},
+                core::Cell::from_char(U'-', core::Style{}.fg(kDimmed)));
     }
 
-    // Process input events.
-    for (;;) {
-      auto ev = input.poll();
-      if (std::holds_alternative<std::monostate>(ev)) break;
+    view::FillView input_bg(
+        core::Cell::from_char(U' ', core::Style{}.bg(kBgPanel)));
+    input_bg.render(frame, l.input);
+    const core::Rect input_content{1, l.input.top() + 1,
+                                   core::coord_t(size.w - 2), 1};
+    auto prompt = view::LabelView(U"> ")
+                      .set_cell(core::Cell::from_char(
+                          U' ', core::Style{}.fg(kFgBright).bg(kBgPanel)));
+    prompt.render(frame, input_content);
+    core::Rect field_area = input_content;
+    field_area.origin.x = core::coord_t(field_area.origin.x + 2);
+    field_area.size.w   = core::coord_t(field_area.size.w - 2);
+    input_field.set_show_cursor(!stream.active);
+    input_field.render(frame, field_area);
 
-      if (std::holds_alternative<core::KeyEvent>(ev)) {
-        const auto &key = std::get<core::KeyEvent>(ev);
+    view::StatusLineView status;
+    std::vector<view::StatusLineView::Segment> segs;
+    if (!note.empty()) {
+      segs.push_back({note + "  ·  ", core::Style{}.fg(kAccentUsr)});
+    }
+    std::string hint = stream.active ? "streaming" : "ready";
+    hint += "  ·  Enter:send  y:copy sel  wheel/drag:scroll  Esc:clear/quit";
+    segs.push_back({hint, core::Style{}.fg(kFgNormal)});
+    status.set_segments(std::move(segs));
+    view::FillView status_bg(
+        core::Cell::from_char(U' ', core::Style{}.bg(0x434C5E)));
+    status_bg.render(frame, l.status);
+    status.render(frame, l.status);
 
-        if (key.code == core::KeyCode::Esc) {
-          should_quit = true;
-          break;
-        }
+    renderer.render(frame);
 
-        if (stream.active) continue;
+    // -- Events --
+    for (core::Event ev = in.poll();
+         !std::holds_alternative<std::monostate>(ev) && running;
+         ev = in.poll()) {
 
-        if (key.code == core::KeyCode::Enter && !input_field.empty()) {
-          messages.push_back({Message::User, input_field.text(), false});
-          const auto &resp =
-              kResponses[response_idx % 4];
-          ++response_idx;
-          messages.push_back({Message::Assistant, U"", true});
-          stream.start(resp);
+      if (const auto *key = std::get_if<core::KeyEvent>(&ev)) {
+        if (key->code == core::KeyCode::Esc) {
+          if (selection.active()) {
+            selection.clear();
+            note.clear();
+          } else {
+            running = false;
+          }
+        } else if (key->code == core::KeyCode::Char &&
+                   key->ch == U'y' && key->mods == core::Mod::None &&
+                   selection.active()) {
+          const std::string text = selection.extract(frame);
+          if (!text.empty() && platform::copy_to_clipboard(text)) {
+            note = "copied " + std::to_string(text.size()) + " bytes";
+          } else {
+            note = "copy failed";
+          }
+        } else if (stream.active) {
+          continue;
+        } else if (key->code == core::KeyCode::Enter &&
+                   !input_field.empty()) {
+          messages.push_back({Message::User, to_utf8(input_field.text())});
           input_field.clear();
-          needs_render = true;
+          stream.start(kResponses[response_idx % 4]);
+          ++response_idx;
+          messages.push_back({Message::Assistant, ""});
+          rebuild_logs();
+        } else if (input_field.handle_key(*key)) {
+          // editing; nothing else to do
+        }
+      }
+
+      if (const auto *m = std::get_if<core::MouseEvent>(&ev)) {
+        const bool in_messages =
+            m->pos.x >= msg_area.left() && m->pos.x < msg_area.right() &&
+            m->pos.y >= msg_area.top() && m->pos.y < msg_area.bottom();
+
+        if (m->action == core::MouseAction::Scroll && in_messages) {
+          logs.on_mouse(*m); // wheel: scrollback (issue #5)
+          continue;
+        }
+        if (!in_messages) {
           continue;
         }
 
-        // Delegate editing (insert / delete / caret motion) to the field.
-        if (input_field.handle_key(key)) {
-          needs_render = true;
+        // Clamp the tracked point into the message area.
+        auto clamp = [&](core::Point p) {
+          p.x = std::clamp(p.x, msg_area.left(),
+                           core::coord_t(msg_area.right() - 1));
+          p.y = std::clamp(p.y, msg_area.top(),
+                           core::coord_t(msg_area.bottom() - 1));
+          return p;
+        };
+
+        if (m->action == core::MouseAction::Down &&
+            m->button == core::MouseButton::Left) {
+          selection.begin(clamp(m->pos));
+          note.clear();
+        } else if ((m->action == core::MouseAction::Drag ||
+                    m->action == core::MouseAction::Move) &&
+                   selection.active()) {
+          // Drag past the top edge pulls older output into view —
+          // same effect as the wheel, driven by the selection gesture
+          // (tmux/terminal behavior). Note the engine gap this makes
+          // visible: SelectionModel anchors frame cells, so rows that
+          // scroll out mid-drag are not captured by extract().
+          if (m->pos.y <= msg_area.top()) {
+            logs.scroll_up(1);
+            selection.extend(clamp(m->pos));
+          } else if (m->pos.y >= msg_area.bottom() - 1) {
+            logs.scroll_down(1);
+            selection.extend(clamp(m->pos));
+          } else {
+            selection.extend(clamp(m->pos));
+          }
+        }
+      }
+
+      if (const auto *rz = std::get_if<core::ResizeEvent>(&ev)) {
+        if (rz->size.w > 0 && rz->size.h > 0) {
+          size = rz->size;
         }
       }
     }
 
-    if (should_quit) break;
-
-    // Tick streaming at ~30 char/s.
-    auto now = std::chrono::steady_clock::now();
+    // -- Stream tick (~30 chars/s) --
+    const auto now = std::chrono::steady_clock::now();
     if (now - last_tick >= 33ms) {
       last_tick = now;
       ++spinner_phase;
       if (stream.active) {
         stream.tick();
-        if (!messages.empty() && messages.back().streaming) {
-          messages.back().text = stream.visible_text();
+        if (!messages.empty()) {
+          messages.back().text = to_utf8(stream.visible_text());
           if (stream.done()) {
-            messages.back().streaming = false;
+            messages.back().text = to_utf8(stream.full_response);
           }
         }
-        needs_render = true;
+        rebuild_logs();
       }
     }
 
-    // Render only when state changed.
-    if (needs_render) {
-      view::Frame frame{size};
-      render_ui(frame, messages, stream, spinner_phase, input_field);
-      app.render(frame);
-      needs_render = false;
-    }
-
-    std::this_thread::sleep_for(16ms);
+    std::this_thread::sleep_for(10ms);
   }
 
   return 0;
