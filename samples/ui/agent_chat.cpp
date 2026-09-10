@@ -28,7 +28,7 @@
 #include "glyph/view/components/status_line.h"
 #include "glyph/view/components/text_input.h"
 #include "glyph/view/frame.h"
-#include "glyph/view/selection.h"
+
 
 namespace {
 
@@ -44,13 +44,6 @@ constexpr core::Color kAccentBot = 0x88C0D0;
 constexpr core::Color kAccentUsr = 0xA3BE8C;
 constexpr core::Color kDimmed    = 0x4C566A;
 constexpr core::Color kWarn      = 0xEBCB8B;
-
-// A single chat message (UTF-8).
-struct Message {
-  enum Role { User, Assistant };
-  Role        role;
-  std::string text;
-};
 
 // Simulated AI response that streams token-by-token.
 struct StreamState {
@@ -159,14 +152,6 @@ int main() {
   render::AnsiRenderer renderer{std::cout};
   core::Size           size = render::terminal_frame_size({80, 24});
 
-  std::vector<Message> messages;
-  messages.push_back(
-      {Message::Assistant,
-       "Hello! I'm an AI agent running in your terminal. Ask me "
-       "anything about this codebase. (Glyph TUI demo.)\n\n"
-       "Scroll with the wheel; drag to select (drag past the top "
-       "edge to reach earlier output); y copies the selection."});
-
   StreamState    stream;
   view::TextInputView input_field;
   input_field.set_cell(
@@ -175,39 +160,27 @@ int main() {
   input_field.set_placeholder_cell(core::Cell::from_char(
       U' ', core::Style{}.fg(kFgNormal).bg(kBgPanel).dim()));
 
+  // Incremental scrollback: push once per logical line and grow the
+  // streaming line with replace_last_line — no clear/rebuild, so the
+  // content-anchored selection and the reader's scroll position stay
+  // stable while responses stream.
   view::ScrollRegionView logs{1000};
-  view::SelectionModel   selection;
 
   std::string note;
   int         spinner_phase = 0;
   int         response_idx  = 0;
 
-  // Rebuild the scrollback from the message list. The offset is
-  // restored so a scrolled-up reader keeps their position while
-  // streaming continues.
-  auto rebuild_logs = [&]() {
-    const std::size_t off = logs.scroll_offset();
-    logs.clear();
-    for (const Message &m : messages) {
-      const bool        is_user = (m.role == Message::User);
-      const core::Style style   = core::Style{}.fg(is_user ? kAccentUsr
-                                                           : kAccentBot);
-      std::string       line    = is_user ? "> " : "  ";
-      line += m.text;
-      logs.push_line(line, style);
-      logs.push_line("", core::Style{});
-    }
-    if (stream.active && stream.think_ticks > 0) {
-      std::string thinking = "  ";
-      thinking += char(*kSpinner[spinner_phase % 4]);
-      thinking += " thinking...";
-      logs.push_line(thinking, core::Style{}.fg(kWarn));
-    }
-    if (off > 0) {
-      logs.scroll_up(off);
-    }
-  };
-  rebuild_logs();
+  logs.push_line(
+      "Hello! I'm an AI agent running in your terminal. Ask me "
+      "anything about this codebase. (Glyph TUI demo.)",
+      core::Style{}.fg(kAccentBot));
+  logs.push_line("", core::Style{});
+  logs.push_line(
+      "Scroll with the wheel; drag to select (drag past the top edge "
+      "to reach earlier output — the selection follows the content, so "
+      "everything you swept is copied); y copies; Enter sends.",
+      core::Style{}.fg(kAccentBot));
+  logs.push_line("", core::Style{});
 
   auto layout = [&]() {
     const core::coord_t header_h = 1, sep_h = 1, input_h = 3, status_h = 1;
@@ -250,7 +223,6 @@ int main() {
                               core::coord_t(size.w - 2),
                               core::coord_t(l.messages.size.h - 2)};
     logs.render(frame, msg_area);
-    selection.highlight(frame);
 
     for (core::coord_t x = l.sep.left(); x < l.sep.right(); ++x) {
       frame.set({x, l.sep.top()},
@@ -295,16 +267,16 @@ int main() {
 
       if (const auto *key = std::get_if<core::KeyEvent>(&ev)) {
         if (key->code == core::KeyCode::Esc) {
-          if (selection.active()) {
-            selection.clear();
+          if (logs.selection_active()) {
+            logs.select_clear();
             note.clear();
           } else {
             running = false;
           }
         } else if (key->code == core::KeyCode::Char &&
                    key->ch == U'y' && key->mods == core::Mod::None &&
-                   selection.active()) {
-          const std::string text = selection.extract(frame);
+                   logs.selection_active()) {
+          const std::string text = logs.extract_selection();
           if (!text.empty() && platform::copy_to_clipboard(text)) {
             note = "copied " + std::to_string(text.size()) + " bytes";
           } else {
@@ -314,12 +286,14 @@ int main() {
           continue;
         } else if (key->code == core::KeyCode::Enter &&
                    !input_field.empty()) {
-          messages.push_back({Message::User, to_utf8(input_field.text())});
+          logs.push_line("> " + to_utf8(input_field.text()),
+                         core::Style{}.fg(kAccentUsr));
+          logs.push_line("", core::Style{});
           input_field.clear();
           stream.start(kResponses[response_idx % 4]);
           ++response_idx;
-          messages.push_back({Message::Assistant, ""});
-          rebuild_logs();
+          logs.push_line("  ...", core::Style{}.fg(kWarn)); // placeholder
+          logs.scroll_to_bottom(); // sending implies wanting the latest
         } else if (input_field.handle_key(*key)) {
           // editing; nothing else to do
         }
@@ -349,24 +323,24 @@ int main() {
 
         if (m->action == core::MouseAction::Down &&
             m->button == core::MouseButton::Left) {
-          selection.begin(clamp(m->pos));
+          logs.select_begin(clamp(m->pos));
           note.clear();
         } else if ((m->action == core::MouseAction::Drag ||
                     m->action == core::MouseAction::Move) &&
-                   selection.active()) {
+                   logs.selection_active()) {
           // Drag past the top edge pulls older output into view —
           // same effect as the wheel, driven by the selection gesture
-          // (tmux/terminal behavior). Note the engine gap this makes
-          // visible: SelectionModel anchors frame cells, so rows that
-          // scroll out mid-drag are not captured by extract().
+          // (tmux/terminal behavior). The selection is content
+          // anchored, so rows swept out of view mid-drag are still
+          // captured by extract_selection().
           if (m->pos.y <= msg_area.top()) {
             logs.scroll_up(1);
-            selection.extend(clamp(m->pos));
+            logs.select_extend(clamp(m->pos));
           } else if (m->pos.y >= msg_area.bottom() - 1) {
             logs.scroll_down(1);
-            selection.extend(clamp(m->pos));
+            logs.select_extend(clamp(m->pos));
           } else {
-            selection.extend(clamp(m->pos));
+            logs.select_extend(clamp(m->pos));
           }
         }
       }
@@ -385,13 +359,19 @@ int main() {
       ++spinner_phase;
       if (stream.active) {
         stream.tick();
-        if (!messages.empty()) {
-          messages.back().text = to_utf8(stream.visible_text());
-          if (stream.done()) {
-            messages.back().text = to_utf8(stream.full_response);
-          }
+        if (stream.think_ticks > 0) {
+          std::string thinking = "  ";
+          thinking += char(*kSpinner[spinner_phase % 4]);
+          thinking += " thinking...";
+          logs.replace_last_line(thinking, core::Style{}.fg(kWarn));
+        } else if (stream.done()) {
+          logs.replace_last_line("  " + to_utf8(stream.full_response),
+                                 core::Style{}.fg(kAccentBot));
+          logs.push_line("", core::Style{}); // trailing separator
+        } else {
+          logs.replace_last_line("  " + to_utf8(stream.visible_text()),
+                                 core::Style{}.fg(kAccentBot));
         }
-        rebuild_logs();
       }
     }
 
