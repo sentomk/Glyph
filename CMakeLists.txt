@@ -166,13 +166,23 @@ add_library(glyph
 add_library(glyph::glyph ALIAS glyph)
 
 if(GLYPH_USE_TEXERE)
-  # glyph is a static library, so what it was compiled against is part of its
-  # link interface: CMake records a private dependency as LINK_ONLY, which
-  # consumers link while inheriting neither include directories nor defines.
-  # $<BUILD_INTERFACE:> would strip it from the installed target and leave the
-  # consumer with undefined texere symbols; texere ships the find_package
-  # support that makes the plain form work, so the two now travel together.
-  target_link_libraries(glyph PRIVATE texere::texere)
+  # glyph is a static library, so what it was compiled against is in its link
+  # interface: CMake records a private dependency as LINK_ONLY, and consumers
+  # link it while inheriting neither include directories nor defines. How the
+  # dependency can be *named* is what differs, and it decides what the
+  # installed package is allowed to promise:
+  #
+  #   - found by find_package: an IMPORTED target, which an export may
+  #     reference, and glyphConfig.cmake finds it again for the consumer.
+  #   - fetched here: a build-tree target, and CMake refuses to export a
+  #     reference to one ("not in any export set"). The install interface then
+  #     cannot promise it, so it stays build-tree only — an installable glyph
+  #     wants an installed texere.
+  if(texere_FOUND)
+    target_link_libraries(glyph PRIVATE texere::texere)
+  else()
+    target_link_libraries(glyph PRIVATE $<BUILD_INTERFACE:texere::texere>)
+  endif()
   target_compile_definitions(glyph PRIVATE GLYPH_USE_TEXERE=1)
 endif()
 
@@ -227,6 +237,13 @@ install(EXPORT glyphTargets
   NAMESPACE glyph::
   DESTINATION ${GLYPH_INSTALL_CMAKEDIR}
 )
+
+# Whether the installed package can find its texere again: only when texere was
+# a package here, because that is the case the export is allowed to reference.
+set(GLYPH_CONFIG_FIND_TEXERE OFF)
+if(GLYPH_USE_TEXERE AND texere_FOUND)
+  set(GLYPH_CONFIG_FIND_TEXERE ON)
+endif()
 
 configure_package_config_file(
   cmake/glyphConfig.cmake.in

@@ -2,10 +2,11 @@
 
 include(CMakeFindDependencyMacro)
 
-# glyph is a static library, so texere is in its link interface whenever
-# GLYPH_USE_TEXERE was on for the build that produced this package, and it has
-# to be findable before glyphTargets.cmake is included.
-if(@GLYPH_USE_TEXERE@)
+# glyph is a static library, so texere is in its link interface whenever the
+# build that produced this package used one that came from a package. When
+# texere was fetched into that build instead, CMake cannot export a reference
+# to it and this package does not name it; the consumer links texere itself.
+if(@GLYPH_CONFIG_FIND_TEXERE@)
   find_dependency(texere CONFIG)
 endif()
 
