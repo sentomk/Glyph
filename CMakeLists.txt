@@ -166,11 +166,13 @@ add_library(glyph
 add_library(glyph::glyph ALIAS glyph)
 
 if(GLYPH_USE_TEXERE)
-  # $<BUILD_INTERFACE:> keeps texere out of the install(EXPORT) interface
-  # (it is not in any export set). The installed static library still
-  # carries texere symbols; wiring the package-level dependency is deferred
-  # until texere ships find_package support.
-  target_link_libraries(glyph PRIVATE $<BUILD_INTERFACE:texere::texere>)
+  # glyph is a static library, so what it was compiled against is part of its
+  # link interface: CMake records a private dependency as LINK_ONLY, which
+  # consumers link while inheriting neither include directories nor defines.
+  # $<BUILD_INTERFACE:> would strip it from the installed target and leave the
+  # consumer with undefined texere symbols; texere ships the find_package
+  # support that makes the plain form work, so the two now travel together.
+  target_link_libraries(glyph PRIVATE texere::texere)
   target_compile_definitions(glyph PRIVATE GLYPH_USE_TEXERE=1)
 endif()
 
