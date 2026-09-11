@@ -1,6 +1,6 @@
 # Glyph
 
-Glyph is a modern C++ TUI (Terminal UI) engine prototype. It provides a clear *semantic 2D canvas* abstraction and pluggable rendering backends. Current status is **0.3.0 prototype**, and APIs may change.
+Glyph is a modern C++ TUI (Terminal UI) engine prototype. It provides a clear *semantic 2D canvas* abstraction and pluggable rendering backends. Current status is **0.4.0 prototype**, and APIs may change.
 
 ## Goals & Positioning
 
@@ -22,7 +22,7 @@ View → Frame (semantic draw) → Renderer (backend output)
 
 Layering rule: upper layers do not depend on lower-level details; backends are replaceable.
 
-## Current Features (0.3.0)
+## Current Features (0.4.0)
 - Semantic 2D canvas and minimal draw pipeline
 - `Cell` width policy + write-time dirty marking
 - ANSI renderer (diff/dirty optimized, true-color styles)

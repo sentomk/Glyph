@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16...3.28)
 
 project(glyph
-  VERSION 0.3.0
+  VERSION 0.4.0
   DESCRIPTION "TUI engine for modern C++"
   LANGUAGES CXX
 )
@@ -36,15 +36,13 @@ if(GLYPH_USE_TEXERE)
   find_package(texere CONFIG QUIET)
   if(NOT texere_FOUND)
     include(FetchContent)
-    # texere switches its own tests and tools off when it is embedded, so these
-    # three lines go away with the next pin bump; they are here because the
-    # pinned revision predates that.
-    set(TEXERE_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
-    set(TEXERE_BUILD_TOOLS      OFF CACHE BOOL "" FORCE)
-    set(TEXERE_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+    # Pinned to a tag, so the clone can be shallow. texere turns its own tests
+    # and tools off when it is embedded, and sets simdutf's switches itself,
+    # which is why nothing here configures a dependency's build.
     FetchContent_Declare(texere
       GIT_REPOSITORY https://github.com/sentomk/texere.git
-      GIT_TAG        ecfc6cab1e004dc0391a9763c20be969705edcf9
+      GIT_TAG        v0.1.0
+      GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(texere)
   endif()
