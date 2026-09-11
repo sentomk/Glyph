@@ -28,15 +28,33 @@ add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 option(GLYPH_USE_TEXERE "Use texere for UAX #29 grapheme segmentation" ON)
 
 if(GLYPH_USE_TEXERE)
-  include(FetchContent)
-  set(TEXERE_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
-  set(TEXERE_BUILD_TOOLS      OFF CACHE BOOL "" FORCE)
-  set(TEXERE_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-  FetchContent_Declare(texere
-    GIT_REPOSITORY https://github.com/sentomk/texere.git
-    GIT_TAG        ecfc6cab1e004dc0391a9763c20be969705edcf9
-  )
-  FetchContent_MakeAvailable(texere)
+  # Look first, download only when it is missing: a consumer that already has
+  # texere — vcpkg, Conan, a distribution package — configures without touching
+  # the network, and one that forbids downloads gets a sentence saying what is
+  # wrong instead of a surprise clone. Set CMAKE_DISABLE_FIND_PACKAGE_texere=ON
+  # to insist on the pinned revision instead.
+  find_package(texere CONFIG QUIET)
+  if(NOT texere_FOUND)
+    include(FetchContent)
+    # texere switches its own tests and tools off when it is embedded, so these
+    # three lines go away with the next pin bump; they are here because the
+    # pinned revision predates that.
+    set(TEXERE_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
+    set(TEXERE_BUILD_TOOLS      OFF CACHE BOOL "" FORCE)
+    set(TEXERE_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(texere
+      GIT_REPOSITORY https://github.com/sentomk/texere.git
+      GIT_TAG        ecfc6cab1e004dc0391a9763c20be969705edcf9
+    )
+    FetchContent_MakeAvailable(texere)
+  endif()
+  if(NOT TARGET texere::texere)
+    message(FATAL_ERROR
+      "GLYPH_USE_TEXERE=ON but texere is not available: find_package did not "
+      "find it and FetchContent did not populate it. Install it, put its prefix "
+      "on CMAKE_PREFIX_PATH, or configure with -DGLYPH_USE_TEXERE=OFF to use "
+      "glyph's own segmentation.")
+  endif()
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
